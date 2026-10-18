@@ -1,0 +1,802 @@
+// =============================================================================
+// 05 · Esquema de base de datos — NativIA
+// =============================================================================
+// Alfabetización crítica en IA para primaria (3.º–5.º) · Bogotá D.C.
+//
+// RESTRICCIONES DE PORTABILIDAD (ver ADR-002 en docs/04-technical-architecture.md)
+// El prototipo corre sobre SQLite; el objetivo es PostgreSQL 16. Para que la
+// migración sea mecánica, este esquema usa SOLO tipos portables:
+//   · Sin `enum`      → String + comentario con los valores admitidos + @@index
+//   · Sin `Json`      → String con JSON serializado + comentario de su forma
+//   · Sin arreglos    → tabla de unión o String separado por comas (documentado)
+//   · Sin `@db.*`     → ninguna anotación específica de motor
+//
+// CONVENCIONES TRANSVERSALES
+//   · id            cuid()
+//   · createdAt / updatedAt  en todas las tablas
+//   · deletedAt     borrado lógico; NULL = vigente. Toda consulta de dominio
+//                   filtra por deletedAt: null (enforcement en la capa de repos)
+//   · AuditLog      inmutable, sin updatedAt ni deletedAt, append-only
+//
+// MINIMIZACIÓN DE DATOS DE MENORES (Ley 1581 de 2012)
+//   NO existe en este esquema, y no debe añadirse, ningún campo para:
+//   dirección, teléfono, correo del menor, fotografía, documento de identidad,
+//   fecha de nacimiento exacta, datos de salud, etnia o religión.
+//   Del menor se guardan: nombre de pila, apellido, grado, curso y su trabajo.
+// =============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  // Prototipo local. Para producción: provider = "postgresql"
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// =============================================================================
+// ORGANIZACIÓN ESCOLAR
+// =============================================================================
+
+model Institution {
+  id        String  @id @default(cuid())
+  name      String
+  /// Código DANE. Puerto de integración con SIMAT (ADR-010); opcional en el prototipo.
+  daneCode  String? @unique
+  city      String  @default("Bogotá D.C.")
+  /// "oficial" | "no_oficial"
+  sector    String  @default("oficial")
+
+  campuses  Campus[]
+  users     User[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([daneCode])
+  @@map("institutions")
+}
+
+/// Sede física. Una institución oficial suele tener varias.
+model Campus {
+  id            String @id @default(cuid())
+  institutionId String
+  name          String
+
+  institution Institution @relation(fields: [institutionId], references: [id])
+  classrooms  Classroom[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([institutionId])
+  @@map("campuses")
+}
+
+/// Curso concreto: sede + grado + jornada + letra. Es la unidad de asignación
+/// del estudio de impacto (ver docs/14-evaluation-framework.md §4.1).
+model Classroom {
+  id       String @id @default(cuid())
+  campusId String
+  /// 3 | 4 | 5 — grado de primaria
+  grade    Int
+  /// "manana" | "tarde" | "unica"
+  shift    String @default("manana")
+  /// Letra o nombre del curso: "A", "B", "301"
+  section  String
+  year     Int
+
+  /// Código de 4 caracteres para el ingreso del estudiante (pantalla 1).
+  /// Excluye O/0, I/1/l, S/5 por ambigüedad visual.
+  joinCode        String   @unique
+  /// El código solo es válido dentro de esta ventana (mitigación ADR-009).
+  joinCodeExpires DateTime?
+
+  /// Brazo del estudio: "tratamiento" | "control_activo" | "control_pasivo" | "ninguno"
+  studyArm String @default("ninguno")
+
+  campus      Campus                @relation(fields: [campusId], references: [id])
+  students    StudentProfile[]
+  assignments ClassroomAssignment[]
+  alerts      TeacherAlert[]
+  summaries   ClassroomSummary[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@unique([campusId, grade, shift, section, year])
+  @@index([joinCode])
+  @@index([studyArm])
+  @@map("classrooms")
+}
+
+// =============================================================================
+// IDENTIDAD Y PERFILES
+// =============================================================================
+
+model User {
+  id            String  @id @default(cuid())
+  institutionId String?
+
+  /// "student" | "teacher" | "coordinator" | "admin"
+  role          String
+
+  firstName     String
+  lastName      String
+
+  /// Solo para adultos. Un estudiante NUNCA tiene email ni passwordHash:
+  /// entra con joinCode + avatar + PIN gráfico (ADR-009).
+  email         String? @unique
+  passwordHash  String?
+  mfaSecret     String?
+
+  isActive      Boolean   @default(true)
+  lastLoginAt   DateTime?
+
+  institution   Institution?          @relation(fields: [institutionId], references: [id])
+  studentProfile StudentProfile?
+  assignments   ClassroomAssignment[]
+  auditEntries  AuditLog[]            @relation("AuditActor")
+  resolvedAlerts TeacherAlert[]       @relation("AlertResolver")
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([role])
+  @@index([institutionId])
+  @@map("users")
+}
+
+/// Datos del estudiante. Deliberadamente pobre en información personal.
+model StudentProfile {
+  id          String @id @default(cuid())
+  userId      String @unique
+  classroomId String
+
+  /// Clave del avatar ilustrado (fauna colombiana). NUNCA una fotografía.
+  avatarKey   String @default("nativia")
+
+  /// Hash del PIN gráfico de 3 imágenes (argon2id). Segundo factor apto para la edad.
+  graphicPinHash String?
+
+  /// Preferencias de accesibilidad, JSON:
+  /// { "textScale": 1.0, "dyslexiaFont": false, "highContrast": false,
+  ///   "ttsRate": 1.0, "reducedMotion": false }
+  a11ySettings String @default("{}")
+
+  /// El acceso está bloqueado hasta que exista un ConsentRecord vigente (US-09).
+  isUnlocked  Boolean @default(false)
+
+  user       User             @relation(fields: [userId], references: [id])
+  classroom  Classroom        @relation(fields: [classroomId], references: [id])
+  consents   ConsentRecord[]
+  attempts   Attempt[]
+  mastery    MasteryScore[]
+  badges     StudentBadge[]
+  budgets    TokenBudget[]
+  alerts     TeacherAlert[]
+  interactions LLMInteraction[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([classroomId])
+  @@index([isUnlocked])
+  @@map("student_profiles")
+}
+
+/// Vincula a un adulto con un curso, con rol y vigencia.
+/// Resuelve el caso real de docentes de apoyo, orientación y reemplazos
+/// (crítica 2 de docs/10-teacher-dashboard-spec.md).
+model ClassroomAssignment {
+  id          String @id @default(cuid())
+  userId      String
+  classroomId String
+
+  /// "titular" | "apoyo" | "orientacion" | "reemplazo" | "coordinacion"
+  role        String
+
+  /// Matriz de permisos derivada del rol; se materializa aquí para auditabilidad.
+  canViewTranscripts Boolean @default(false)
+  canResolveRiskAlerts Boolean @default(false)
+
+  startsAt DateTime  @default(now())
+  endsAt   DateTime?
+
+  user      User      @relation(fields: [userId], references: [id])
+  classroom Classroom @relation(fields: [classroomId], references: [id])
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@unique([userId, classroomId, role])
+  @@index([classroomId, role])
+  @@map("classroom_assignments")
+}
+
+// =============================================================================
+// CONSENTIMIENTO PARENTAL
+// =============================================================================
+
+/// [SUPUESTO — VALIDACIÓN JURÍDICA PENDIENTE]
+/// El mecanismo de consentimiento verificable no está definido jurídicamente.
+/// Este modelo soporta el flujo híbrido (certificación institucional +
+/// ratificación/revocación del acudiente) y es parametrizable por institución.
+model ConsentRecord {
+  id               String @id @default(cuid())
+  studentProfileId String
+
+  /// "institucional" | "acudiente_digital" | "hibrido"
+  mechanism        String
+  /// "pendiente" | "otorgado" | "revocado" | "expirado"
+  status           String @default("pendiente")
+
+  /// Versión del texto de consentimiento aceptado. Versionado obligatorio:
+  /// un cambio de texto invalida los consentimientos anteriores.
+  policyVersion    String
+
+  /// Identificación del adulto que autoriza, seudonimizada.
+  /// NO se almacena su documento de identidad ni su dirección.
+  guardianRef      String?
+  guardianRelation String?
+
+  grantedAt  DateTime?
+  revokedAt  DateTime?
+  expiresAt  DateTime?
+
+  /// Evidencia del acto, JSON:
+  /// { "channel": "correo|papel|portal", "ip": "...", "userAgent": "...",
+  ///   "certifiedByUserId": "...", "documentRef": "..." }
+  evidence   String @default("{}")
+
+  studentProfile StudentProfile @relation(fields: [studentProfileId], references: [id])
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([studentProfileId, status])
+  @@index([status, expiresAt])
+  @@map("consent_records")
+}
+
+// =============================================================================
+// CONTENIDO PEDAGÓGICO
+// =============================================================================
+// El contenido canónico vive versionado en packages/content/ (ADR-008).
+// Estas tablas son la proyección cargada por `seed`; la base guarda
+// referencias y resultados, no la autoría.
+
+model LearningPath {
+  id     String @id @default(cuid())
+  slug   String @unique
+  name   String
+  /// 3 | 4 | 5
+  grade  Int
+
+  activities Activity[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([grade])
+  @@map("learning_paths")
+}
+
+/// Los cuatro ejes: A, B, C, D.
+model Axis {
+  id    String @id @default(cuid())
+  /// "A" | "B" | "C" | "D"
+  code  String @unique
+  name  String
+  /// Nombre visible para el estudiante: "Piensa con la IA"
+  displayName String
+  colorToken  String
+  /// ¿Puede completarse sin conexión? A, C y D = true; B = false (degrada).
+  offlineCapable Boolean @default(true)
+
+  activities Activity[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("axes")
+}
+
+model Activity {
+  id             String @id @default(cuid())
+  slug           String @unique
+  learningPathId String
+  axisId         String
+
+  title       String
+  /// "matematicas" | "lenguaje" | "ciencias"
+  subject     String
+  /// "tutor_socratico" | "clasificacion" | "dilema_ramificado" | "comparacion"
+  kind        String
+  orderIndex  Int
+  estimatedMinutes Int
+
+  // --- Trazabilidad pedagógica (requisito transversal del proyecto) ---
+  /// Subcompetencia PISA, p. ej. "MAT.interpretar_evaluar"
+  pisaCompetence String
+  /// Referencia DBA del MEN, p. ej. "MAT.4.6"
+  dbaReference   String
+  /// "recordar"|"comprender"|"aplicar"|"analizar"|"evaluar"|"crear"
+  bloomLevel     String
+
+  // --- Configuración del tutor (solo kind = tutor_socratico) ---
+  /// Clave del system prompt en packages/content/prompts/
+  systemPromptKey String?
+  /// Valores que el tutor NUNCA puede afirmar como resultado.
+  /// JSON: ["4", "cuatro", "24/6"] — alimenta la capa 1 del detector de fuga.
+  forbiddenAnswers String @default("[]")
+  /// Clave del árbol socrático pregrabado (ADR-005). Obligatorio si el eje es B.
+  fallbackTreeKey  String?
+  /// Turnos antes de ofrecer una pista fuerte (andamiaje decreciente por grado).
+  maxTurnsBeforeHint Int @default(6)
+
+  /// Contenido de los pasos, JSON validado por Zod en CI.
+  /// Su forma depende de `kind`; ver packages/content/schemas/.
+  payload String @default("{}")
+
+  /// Todo contenido que ve un menor pasa por revisión editorial humana
+  /// (salvaguarda ética 7). Sin revisor, la actividad no se publica.
+  reviewedBy String?
+  reviewedAt DateTime?
+  isPublished Boolean @default(false)
+
+  learningPath LearningPath @relation(fields: [learningPathId], references: [id])
+  axis         Axis         @relation(fields: [axisId], references: [id])
+  attempts     Attempt[]
+  mastery      MasteryScore[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([learningPathId, orderIndex])
+  @@index([axisId])
+  @@index([pisaCompetence])
+  @@index([isPublished])
+  @@map("activities")
+}
+
+// =============================================================================
+// TRABAJO DEL ESTUDIANTE
+// =============================================================================
+
+model Attempt {
+  id               String @id @default(cuid())
+  studentProfileId String
+  activityId       String
+
+  /// Idempotencia de la cola offline (ADR-007). Generado en el dispositivo.
+  clientAttemptId  String @unique
+
+  /// "en_curso" | "completado" | "abandonado"
+  status      String   @default("en_curso")
+  /// "online" | "degradado_sin_red" | "degradado_sin_presupuesto" | "mock"
+  /// Dimensión de primer nivel del análisis de impacto: online y degradado
+  /// son intervenciones distintas (crítica 2 de docs/04-technical-architecture.md).
+  mode        String   @default("online")
+
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+  durationSeconds Int?
+
+  /// ¿Resolvió sin pistas? Alimenta "lo lograste sin ayuda" vs "con pistas".
+  hintsUsed   Int     @default(0)
+  isCorrect   Boolean?
+  /// En ejes C y D un acierto sin justificación válida NO cuenta para el
+  /// dominio (US-02). Este campo es el que lo controla.
+  hasValidJustification Boolean @default(false)
+
+  /// North Star Metric (ISVI): ¿el estudiante enunció y registró un método
+  /// propio de comprobación ANTES de que el tutor lo sugiriera?
+  independentVerification Boolean @default(false)
+  verificationNote        String?
+
+  studentProfile StudentProfile @relation(fields: [studentProfileId], references: [id])
+  activity       Activity       @relation(fields: [activityId], references: [id])
+  events         AttemptEvent[]
+  interaction    LLMInteraction?
+  metacognition  MetacognitionResponse?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([studentProfileId, completedAt])
+  @@index([activityId])
+  @@index([mode])
+  @@index([independentVerification])
+  @@map("attempts")
+}
+
+/// Evento granular. En producción replica a ClickHouse; en el prototipo
+/// vive aquí (ADR-002). Se lee siempre a través de la interfaz EventStore.
+model AttemptEvent {
+  id        String @id @default(cuid())
+  attemptId String
+
+  /// Idempotencia de la cola offline (ADR-007). Upsert por esta clave.
+  clientEventId String @unique
+
+  /// "paso_visto" | "respuesta_enviada" | "pista_pedida" | "turno_tutor" |
+  /// "justificacion_enviada" | "comprobacion_registrada" | "abandono" |
+  /// "item_trampa_mostrado" | "item_trampa_respondido"
+  type      String
+  stepIndex Int?
+
+  /// Carga útil del evento, JSON. Forma según `type`.
+  payload   String @default("{}")
+
+  /// Momento en el dispositivo (puede diferir del servidor si estaba offline).
+  occurredAt   DateTime
+  /// Momento en que el servidor lo recibió. La diferencia mide el rezago offline.
+  receivedAt   DateTime @default(now())
+
+  attempt Attempt @relation(fields: [attemptId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([attemptId, occurredAt])
+  @@index([type, occurredAt])
+  @@map("attempt_events")
+}
+
+/// Respuesta a "¿qué aprendiste sobre cómo TÚ piensas?" (US-03).
+/// Se muestra al docente TEXTUAL, sin resumir ni analizar automáticamente
+/// (docs/10-teacher-dashboard-spec.md §6.2). NUNCA se califica.
+model MetacognitionResponse {
+  id        String @id @default(cuid())
+  attemptId String @unique
+
+  /// "texto" | "voz" | "opcion_andamiaje"
+  inputMode String @default("texto")
+  text      String
+  /// Frases de andamiaje seleccionadas, separadas por "|".
+  scaffoldTags String?
+  audioRef  String?
+
+  attempt Attempt @relation(fields: [attemptId], references: [id])
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@map("metacognition_responses")
+}
+
+// =============================================================================
+// INTERACCIÓN CON EL LLM
+// =============================================================================
+
+/// Un diálogo completo entre un estudiante y el tutor, dentro de un intento.
+/// Es el registro que hace auditable el eje B (ADR-004).
+model LLMInteraction {
+  id               String @id @default(cuid())
+  attemptId        String @unique
+  studentProfileId String
+
+  /// Id exacto del modelo, p. ej. "claude-sonnet-5". Registrado para poder
+  /// correlacionar un cambio de modelo con un cambio de comportamiento (ADR-006).
+  model        String
+  temperature  Float  @default(0.4)
+  systemPromptKey String
+  /// Hash del system prompt efectivamente enviado. Permite verificar que una
+  /// conversación histórica se produjo con el prompt que se cree.
+  systemPromptHash String
+
+  inputTokens  Int @default(0)
+  outputTokens Int @default(0)
+  turnCount    Int @default(0)
+
+  // --- Banderas de seguridad y pedagogía, agregadas del diálogo ---
+  flaggedModeration   Boolean @default(false)
+  flaggedRisk         Boolean @default(false)
+  flaggedEvasion      Boolean @default(false)
+  evasionAttempts     Int     @default(0)
+  /// Fugas de respuesta detectadas por el detector de 3 capas.
+  /// > 0 exige revisión: el sistema las bloqueó, pero indica prompt débil.
+  answerLeaksDetected Int     @default(0)
+  /// Clasificación de aceptación acrítica (docs/10 §4.1). NULL = sin clasificar.
+  acriticalAcceptanceRatio Float?
+
+  startedAt DateTime  @default(now())
+  endedAt   DateTime?
+
+  attempt        Attempt        @relation(fields: [attemptId], references: [id])
+  studentProfile StudentProfile @relation(fields: [studentProfileId], references: [id])
+  turns          LLMTurn[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([studentProfileId, startedAt])
+  @@index([flaggedRisk])
+  @@index([answerLeaksDetected])
+  @@map("llm_interactions")
+}
+
+/// Un turno. Inmutable: las transcripciones no se editan, solo se anotan
+/// (docs/10-teacher-dashboard-spec.md §7).
+model LLMTurn {
+  id            String @id @default(cuid())
+  interactionId String
+  turnIndex     Int
+
+  /// "estudiante" | "tutor" | "sistema"
+  role    String
+  content String
+
+  /// "normal" | "evasion" | "fuera_de_alcance" | "riesgo"
+  intentClass String?
+  /// Etiquetas de moderación, separadas por ",".
+  moderationTags String?
+  /// El turno del tutor fue rechazado por fuga y regenerado.
+  wasRegenerated Boolean @default(false)
+  /// Turno servido por el árbol pregrabado, no por el modelo.
+  fromFallbackTree Boolean @default(false)
+
+  latencyMs   Int?
+  occurredAt  DateTime @default(now())
+
+  interaction LLMInteraction @relation(fields: [interactionId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@unique([interactionId, turnIndex])
+  @@index([intentClass])
+  @@map("llm_turns")
+}
+
+/// Techo duro de costo por estudiante y período (ADR-006, requisito P-04).
+/// Al agotarse, el tutor degrada al árbol pregrabado sin mencionar costos al niño.
+model TokenBudget {
+  id               String @id @default(cuid())
+  studentProfileId String
+
+  /// "2026-09" — período mensual
+  period       String
+  inputTokensUsed  Int @default(0)
+  outputTokensUsed Int @default(0)
+  /// Techo del período, en tokens de salida equivalentes.
+  limitTokens  Int @default(60000)
+  isExhausted  Boolean @default(false)
+
+  studentProfile StudentProfile @relation(fields: [studentProfileId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([studentProfileId, period])
+  @@index([isExhausted])
+  @@map("token_budgets")
+}
+
+// =============================================================================
+// PROGRESO Y LOGROS
+// =============================================================================
+
+/// Dominio por estudiante × subcompetencia, estimado con Bayesian Knowledge
+/// Tracing (docs/10-teacher-dashboard-spec.md §4.2).
+model MasteryScore {
+  id               String @id @default(cuid())
+  studentProfileId String
+  activityId       String?
+
+  /// Subcompetencia PISA. Es la dimensión real del dominio; `activityId`
+  /// se conserva solo para trazabilidad de la última evidencia.
+  pisaCompetence String
+  axisCode       String
+
+  /// p(dominio) según BKT. 0..1
+  probability Float @default(0.25)
+  /// Oportunidades de práctica. < 2 ⇒ el heatmap muestra "sin datos",
+  /// nunca "necesita apoyo" (regla no negociable de docs/10 §4.2).
+  opportunities Int @default(0)
+  /// "sin_datos" | "necesita_apoyo" | "va_en_camino" | "lo_maneja_bien"
+  level         String @default("sin_datos")
+
+  /// Parámetros BKT vigentes al calcular, JSON:
+  /// { "pInit":0.25, "pLearn":0.15, "pSlip":0.10, "pGuess":0.20 }
+  /// Se guardan para poder recalcular históricamente tras una recalibración.
+  bktParams String @default("{}")
+
+  lastEvidenceAt DateTime?
+
+  studentProfile StudentProfile @relation(fields: [studentProfileId], references: [id])
+  activity       Activity?      @relation(fields: [activityId], references: [id])
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@unique([studentProfileId, pisaCompetence])
+  @@index([axisCode, level])
+  @@map("mastery_scores")
+}
+
+/// Los logros premian conductas epistémicas ("Preguntona", "Duda bien"),
+/// no volumen de ejercicios (docs/02 pantalla 9).
+model Badge {
+  id          String @id @default(cuid())
+  slug        String @unique
+  name        String
+  description String
+  iconKey     String
+  axisCode    String?
+
+  /// Regla de obtención, JSON:
+  /// { "metric":"independent_verification_count", "op":">=", "value":3 }
+  criteria    String @default("{}")
+
+  students StudentBadge[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("badges")
+}
+
+model StudentBadge {
+  id               String @id @default(cuid())
+  studentProfileId String
+  badgeId          String
+  earnedAt         DateTime @default(now())
+
+  studentProfile StudentProfile @relation(fields: [studentProfileId], references: [id])
+  badge          Badge          @relation(fields: [badgeId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@unique([studentProfileId, badgeId])
+  @@map("student_badges")
+}
+
+// =============================================================================
+// ALERTAS Y ANALÍTICA DOCENTE
+// =============================================================================
+
+model TeacherAlert {
+  id          String @id @default(cuid())
+  classroomId String
+  /// NULL en alertas grupales (A-GRUPO) y de sistema (A-DEGRAD).
+  studentProfileId String?
+
+  /// "A-RIESGO"|"A-DELEG"|"A-EVASION"|"A-INACT"|"A-ATASCO"|"A-GRUPO"|
+  /// "A-CONSENT"|"A-DEGRAD"
+  code     String
+  /// "critica" | "media" | "baja"
+  severity String
+
+  /// Texto en lenguaje llano, sin jerga. Enuncia conducta observable,
+  /// nunca un atributo del niño (docs/10 §2.1).
+  message  String
+  /// Acción concreta ofrecida. Sin acción, la alerta NO se emite.
+  /// JSON: { "type":"plan_de_clase", "ref":"explicalo-sin-numeros" }
+  suggestedAction String @default("{}")
+
+  /// El contenido sensible de una alerta 🔴 no se muestra en el listado;
+  /// requiere apertura deliberada (docs/02 pantalla 16).
+  isContentHidden Boolean @default(false)
+
+  /// "abierta" | "atendida" | "no_aplica" | "escalada"
+  status     String @default("abierta")
+  /// "no_aplica" alimenta el ajuste de umbrales por docente (docs/10 §5.2).
+  resolvedById String?
+  resolvedAt   DateTime?
+  resolutionNote String?
+
+  classroom      Classroom       @relation(fields: [classroomId], references: [id])
+  studentProfile StudentProfile? @relation(fields: [studentProfileId], references: [id])
+  resolvedBy     User?           @relation("AlertResolver", fields: [resolvedById], references: [id])
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([classroomId, status, severity])
+  @@index([code, createdAt])
+  @@index([studentProfileId, status])
+  @@map("teacher_alerts")
+}
+
+/// Resumen materializado por curso. El panel NUNCA consulta attempt_events
+/// en vivo: con 32 estudiantes funcionaría, con 300.000 no
+/// (docs/10-teacher-dashboard-spec.md §9).
+model ClassroomSummary {
+  id          String @id @default(cuid())
+  classroomId String
+
+  /// Ventana del cálculo: "7d" | "30d"
+  window      String
+  computedAt  DateTime @default(now())
+
+  activeStudents      Int   @default(0)
+  attemptsCompleted   Int   @default(0)
+  /// North Star: interacciones socráticas con verificación independiente.
+  isviRatio           Float @default(0)
+  /// Métrica antagónica: tasa de delegación acrítica.
+  acriticalRatio      Float?
+  degradedTurnRatio   Float @default(0)
+
+  /// Ranking de triaje precalculado, JSON:
+  /// [{ "studentProfileId":"...", "score":72, "reason":"..." }]
+  triageTop3          String @default("[]")
+  /// Dominio agregado por eje, JSON: { "A":0.62, "B":0.31, "C":0.70, "D":0.28 }
+  masteryByAxis       String @default("{}")
+
+  classroom Classroom @relation(fields: [classroomId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([classroomId, window])
+  @@index([computedAt])
+  @@map("classroom_summaries")
+}
+
+// =============================================================================
+// AUDITORÍA
+// =============================================================================
+
+/// Append-only. Sin updatedAt, sin deletedAt, sin borrado.
+/// En PostgreSQL se refuerza con un trigger que impide UPDATE y DELETE;
+/// en SQLite la garantía es de capa de aplicación (limitación documentada).
+model AuditLog {
+  id      String @id @default(cuid())
+  actorId String?
+
+  /// "consulta_transcripcion" | "resolucion_alerta" | "cambio_consentimiento" |
+  /// "exportacion_datos" | "borrado_derecho_olvido" | "cambio_rol" |
+  /// "ingreso_anomalo" | "cambio_modelo_llm"
+  action     String
+  /// Tipo y id del objeto afectado.
+  targetType String
+  targetId   String
+
+  /// Motivo declarado por el actor cuando la acción lo exige
+  /// (p. ej. acceso individual de coordinación).
+  reason     String?
+  /// Contexto, JSON: { "ip":"...", "userAgent":"...", "classroomId":"..." }
+  context    String @default("{}")
+
+  occurredAt DateTime @default(now())
+
+  actor User? @relation("AuditActor", fields: [actorId], references: [id])
+
+  @@index([actorId, occurredAt])
+  @@index([targetType, targetId])
+  @@index([action, occurredAt])
+  @@map("audit_log")
+}
+
+// =============================================================================
+// NOTAS DE MIGRACIÓN A POSTGRESQL
+// =============================================================================
+// 1. datasource.provider = "postgresql"
+// 2. Convertir a `enum` nativo: User.role, Attempt.status, Attempt.mode,
+//    TeacherAlert.code, TeacherAlert.severity, MasteryScore.level, LLMTurn.role.
+//    Los valores admitidos ya están documentados en los comentarios de cada campo.
+// 3. Convertir a `Json`: a11ySettings, payload, evidence, criteria, context,
+//    bktParams, suggestedAction, triageTop3, masteryByAxis, forbiddenAnswers.
+// 4. Añadir trigger de solo-inserción sobre audit_log.
+// 5. Particionar attempt_events por mes, o replicar a ClickHouse y conservar
+//    aquí solo una ventana caliente de 90 días.
+// 6. Añadir índices GIN sobre los campos Json que se consulten.
+// 7. Cifrado en reposo: activar el del motor gestionado; los campos de texto
+//    libre del estudiante (LLMTurn.content, MetacognitionResponse.text) son los
+//    de mayor sensibilidad.
+// =============================================================================

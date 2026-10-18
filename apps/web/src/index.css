@@ -1,0 +1,128 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── Tipografía ─────────────────────────────────────────────────────────────
+   Nunito Sans, servida desde /public/fonts. Está declarada en el design system
+   (docs/03 §3) desde el principio, pero nunca se cargó: la app venía cayendo al
+   fallback `system-ui`, que en un equipo del colegio es Segoe UI.
+
+   Se auto-hospeda y no se pide a un CDN por dos razones: el prototipo debe
+   funcionar sin conexión (decisión fundacional 4), y un equipo escolar no
+   debería tener que alcanzar a Google para renderizar la interfaz.
+
+   Es la fuente variable (un archivo por subconjunto cubre 400–800), así que
+   pesa 59 KB en total. Licencia SIL Open Font.                              */
+
+@font-face {
+  font-family: 'Nunito Sans';
+  font-style: normal;
+  font-weight: 400 800;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url('/fonts/nunito-sans-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Nunito Sans';
+  font-style: normal;
+  font-weight: 400 800;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url('/fonts/nunito-sans-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF,
+    U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020,
+    U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@layer base {
+  html {
+    /* El control de tamaño del usuario escala 100–175 % sin romper el layout
+       ni requerir scroll horizontal (WCAG 1.4.4 y 1.4.10). */
+    font-size: calc(16px * var(--text-scale, 1));
+  }
+
+  body {
+    @apply bg-white text-ink font-sans text-body antialiased;
+    /* Nunito tiene números de altura variable por defecto; en una interfaz que
+       muestra códigos de curso, conteos y fechas, las cifras deben alinearse. */
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* El titular no hereda el interletrado del cuerpo: a 30 px y 40 px el
+     espaciado por defecto de Nunito abre demasiado. */
+  h1,
+  h2 {
+    letter-spacing: -0.015em;
+  }
+
+  /* Foco visible siempre. Nunca `outline: none` sin reemplazo (WCAG 2.4.7). */
+  :focus-visible {
+    outline: 3px solid #16202b;
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  /* Modo dislexia, activable por el propio estudiante. */
+  .dyslexia body,
+  .dyslexia {
+    @apply font-dys;
+    letter-spacing: 0.05em;
+    line-height: 1.8;
+  }
+
+  .dyslexia .prose-block {
+    background: #fbf7ef;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@layer components {
+  .card {
+    @apply rounded-md border border-line bg-white p-6;
+  }
+
+  /* Superficie del módulo estudiante. Una tarjeta blanca sobre fondo blanco no
+     tiene forma; el gris de superficie le da borde sin necesidad de sombra. */
+  .panel {
+    @apply rounded-lg border border-line bg-white;
+  }
+
+  /* Módulo docente: denso y eficiente (principio 7 del design system). La fila
+     es la unidad, no la tarjeta — ocho estudiantes en tarjetas obligan a hacer
+     scroll para responder «¿a quién atiendo hoy?». */
+  .row {
+    @apply flex flex-wrap items-center gap-4 border-b border-line px-4 py-3 last:border-b-0;
+  }
+}
+
+/* «El tutor está pensando…» — animación suave, nunca un spinner solo. */
+@keyframes thinking-dot {
+  0%, 60%, 100% { opacity: 0.25; }
+  30% { opacity: 1; }
+}
+.thinking-dot { animation: thinking-dot 1.2s infinite; }
+.thinking-dot:nth-child(2) { animation-delay: 0.15s; }
+.thinking-dot:nth-child(3) { animation-delay: 0.3s; }
+
+/* Entrada del sello al cargar el mapa. Un solo momento orquestado en toda la
+   app: los cuatro sellos brotan escalonados, que es el gesto de la marca.
+   No hay transiciones de hover en tarjetas ni entradas por sección. */
+@keyframes seal-in {
+  from { opacity: 0; transform: translateY(6px) scale(0.94); }
+  to   { opacity: 1; transform: none; }
+}
+.seal-in { animation: seal-in 0.42s cubic-bezier(.2,.8,.2,1) both; }

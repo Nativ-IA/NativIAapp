@@ -1,0 +1,24 @@
+{
+  "name": "nativia",
+  "version": "0.1.0",
+  "private": true,
+  "description": "NativIA — Alfabetización crítica en IA para primaria (SABER 5, Colombia)",
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@9.0.0",
+  "scripts": {
+    "dev": "concurrently -n api,web -c blue,green \"pnpm --filter @nativia/api dev\" \"pnpm --filter @nativia/web dev\"",
+    "build": "pnpm --filter @nativia/api build && pnpm --filter @nativia/web build",
+    "test": "pnpm --filter @nativia/api test",
+    "db:push": "pnpm --filter @nativia/db push",
+    "db:seed": "pnpm --filter @nativia/db seed",
+    "db:reset": "pnpm --filter @nativia/db reset",
+    "setup": "pnpm install && pnpm db:push && pnpm db:seed",
+    "check:palette": "python packages/ui/scripts/validate_palette.py \"#2F62C4,#0D9668,#AC7100,#A03390\" --mode light --surface \"#F5F8FA\" --pairs all && python packages/ui/scripts/validate_palette.py \"#8FA9DE,#4A72C6,#1D428E\" --mode light --surface \"#F5F8FA\" --ordinal"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.1",
+    "typescript": "^5.6.3"
+  }
+}

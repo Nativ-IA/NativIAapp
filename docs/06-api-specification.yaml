@@ -1,0 +1,1386 @@
+openapi: 3.1.0
+
+info:
+  title: NativIA API
+  version: 0.1.0
+  summary: Alfabetización crítica en IA para primaria (3.º–5.º) · Bogotá D.C.
+  description: |
+    API del prototipo local de NativIA.
+
+    ## Principios que gobiernan esta API
+
+    1. **El cliente nunca habla con el LLM.** No existe endpoint que acepte un
+       system prompt, un modelo o parámetros de inferencia desde el cliente
+       (ADR-004). `POST /tutor/turn` recibe únicamente el texto del estudiante.
+    2. **Minimización de datos de menores.** Ningún esquema de esta API
+       transporta dirección, teléfono, correo del menor, fotografía, documento
+       de identidad ni fecha de nacimiento.
+    3. **Idempotencia obligatoria** en toda escritura originada en el cliente,
+       mediante identificadores generados en el dispositivo (ADR-007). El modo
+       offline depende de ello.
+    4. **Toda consulta a datos de un menor es auditada.** Leer una transcripción
+       no es una operación neutra: escribe en `audit_log`.
+    5. **Sin acceso de rectoría a datos individuales.** El rol `coordinator`
+       recibe 403 en todo endpoint que devuelva contenido de un estudiante
+       identificable (decisión permanente, PRD R-04).
+
+    ## Convenciones
+
+    - Fechas en ISO 8601 con zona horaria.
+    - Errores con `application/problem+json` (RFC 9457).
+    - Paginación por cursor (`cursor` / `nextCursor`), nunca por offset.
+
+  contact:
+    name: Equipo NativIA
+  license:
+    name: Por definir
+
+servers:
+  - url: http://localhost:3000/v1
+    description: Prototipo local (único entorno existente hoy)
+  - url: https://api.nativia.edu.co/v1
+    description: Producción [DIFERIDO — no desplegado]
+
+tags:
+  - name: auth
+    description: Autenticación diferenciada por edad (ADR-009)
+  - name: student
+    description: Experiencia del estudiante
+  - name: tutor
+    description: Proxy seguro al LLM. El componente más crítico del sistema
+  - name: sync
+    description: Cola offline e idempotencia
+  - name: teacher
+    description: Panel del Maestro
+  - name: consent
+    description: Consentimiento parental [SUPUESTO — validación jurídica pendiente]
+  - name: privacy
+    description: Derechos del titular (Ley 1581 de 2012)
+  - name: system
+    description: Salud y diagnóstico
+
+security:
+  - bearerAuth: []
+
+paths:
+
+  # ===========================================================================
+  # AUTENTICACIÓN
+  # ===========================================================================
+
+  /auth/classroom/{joinCode}:
+    get:
+      tags: [auth]
+      summary: Resolver un código de curso y listar sus avatares
+      description: |
+        Paso 1 del ingreso del estudiante. Devuelve los avatares del curso para
+        que el niño se identifique visualmente.
+
+        **Riesgo conocido y aceptado con mitigación:** expone los nombres de pila
+        del curso a quien posea el código. Mitigado con (a) vigencia acotada del
+        código a la ventana de clase y (b) el PIN gráfico como segundo factor.
+        Sujeto a revisión en el DPIA antes del piloto.
+      security: []
+      parameters:
+        - name: joinCode
+          in: path
+          required: true
+          schema: { type: string, minLength: 4, maxLength: 4, pattern: '^[A-HJ-NP-Za-hj-np-z2-9]{4}$' }
+      responses:
+        '200':
+          description: Curso resuelto
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [classroom, students]
+                properties:
+                  classroom:
+                    type: object
+                    properties:
+                      id: { type: string }
+                      grade: { type: integer, enum: [3, 4, 5] }
+                      section: { type: string }
+                      teacherDisplayName: { type: string }
+                  students:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        studentProfileId: { type: string }
+                        firstName: { type: string }
+                        lastName: { type: string, description: Solo la inicial }
+                        avatarKey: { type: string }
+                        requiresPin: { type: boolean }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '410':
+          description: El código expiró y debe renovarlo el docente
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /auth/student:
+    post:
+      tags: [auth]
+      summary: Iniciar sesión de estudiante
+      description: |
+        Paso 2: avatar + PIN gráfico de 3 imágenes (ADR-009).
+
+        Devuelve 403 con `code: consent_required` si no existe un
+        `ConsentRecord` vigente. **La ausencia de consentimiento se trata como
+        una condición de acceso, no como un error de credenciales** (US-09).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [joinCode, studentProfileId]
+              properties:
+                joinCode: { type: string }
+                studentProfileId: { type: string }
+                graphicPin:
+                  type: array
+                  description: Secuencia de 3 claves de imagen
+                  items: { type: string }
+                  minItems: 3
+                  maxItems: 3
+                deviceId:
+                  type: string
+                  description: Identificador del dispositivo, generado localmente
+      responses:
+        '200':
+          description: Sesión iniciada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StudentSession' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          description: Sin autorización del acudiente
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+              example:
+                type: 'https://nativia.edu.co/problems/consent-required'
+                title: Falta la autorización del acudiente
+                status: 403
+                code: consent_required
+                detail: Este estudiante todavía no puede usar NativIA.
+
+  /auth/teacher:
+    post:
+      tags: [auth]
+      summary: Iniciar sesión de docente o coordinación
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, format: password }
+                mfaCode: { type: string }
+      responses:
+        '200':
+          description: Sesión iniciada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TeacherSession' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /auth/refresh:
+    post:
+      tags: [auth]
+      summary: Rotar el token de sesión
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken: { type: string }
+      responses:
+        '200':
+          description: Token renovado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accessToken: { type: string }
+                  refreshToken: { type: string }
+                  expiresIn: { type: integer }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  # ===========================================================================
+  # EXPERIENCIA DEL ESTUDIANTE
+  # ===========================================================================
+
+  /me/path:
+    get:
+      tags: [student]
+      summary: Mapa de rutas del estudiante
+      description: |
+        Devuelve los cuatro ejes con su progreso. Es la pantalla ancla
+        (`docs/02-information-architecture.md`, pantalla 3).
+      responses:
+        '200':
+          description: Mapa de rutas
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  student:
+                    type: object
+                    properties:
+                      firstName: { type: string }
+                      avatarKey: { type: string }
+                      grade: { type: integer }
+                      badgeCount: { type: integer }
+                  axes:
+                    type: array
+                    items: { $ref: '#/components/schemas/AxisProgress' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /axes/{axisCode}/activities:
+    get:
+      tags: [student]
+      summary: Actividades de un eje
+      parameters:
+        - name: axisCode
+          in: path
+          required: true
+          schema: { type: string, enum: [A, B, C, D] }
+      responses:
+        '200':
+          description: Lista de actividades con estado
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ActivitySummary' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /activities/{activityId}:
+    get:
+      tags: [student]
+      summary: Contenido completo de una actividad
+      description: |
+        Devuelve los pasos y, **cuando el eje es B, también el árbol socrático
+        pregrabado**, para que el Service Worker pueda precargarlo y la actividad
+        siga siendo completable sin red (ADR-005).
+
+        **Nunca** devuelve el system prompt ni `forbiddenAnswers`: esos datos
+        viven solo en el servidor. Enviarlos al cliente permitiría al estudiante
+        leer la respuesta que la actividad le pide encontrar.
+      parameters:
+        - name: activityId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Actividad
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Activity' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /activities/{activityId}/attempts:
+    post:
+      tags: [student]
+      summary: Iniciar un intento
+      parameters:
+        - name: activityId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [clientAttemptId]
+              properties:
+                clientAttemptId:
+                  type: string
+                  format: uuid
+                  description: Generado en el dispositivo. Garantiza idempotencia (ADR-007)
+                mode:
+                  type: string
+                  enum: [online, degradado_sin_red, degradado_sin_presupuesto, mock]
+                  default: online
+      responses:
+        '201':
+          description: Intento creado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Attempt' }
+        '200':
+          description: El intento ya existía (reintento idempotente)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Attempt' }
+
+  /attempts/{attemptId}/complete:
+    post:
+      tags: [student]
+      summary: Cerrar un intento con su respuesta metacognitiva
+      description: |
+        La respuesta metacognitiva es **obligatoria** (US-03). Sin ella el
+        intento no se cierra: es una regla pedagógica, aplicada en el servidor
+        y no solo en la interfaz.
+      parameters:
+        - name: attemptId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [metacognition]
+              properties:
+                isCorrect: { type: boolean }
+                hintsUsed: { type: integer, minimum: 0 }
+                hasValidJustification: { type: boolean }
+                independentVerification:
+                  type: boolean
+                  description: Alimenta la North Star Metric (ISVI)
+                verificationNote: { type: string, maxLength: 500 }
+                metacognition:
+                  type: object
+                  required: [inputMode]
+                  properties:
+                    inputMode: { type: string, enum: [texto, voz, opcion_andamiaje] }
+                    text: { type: string, maxLength: 1000 }
+                    scaffoldTags:
+                      type: array
+                      items: { type: string }
+      responses:
+        '200':
+          description: Intento cerrado, con logros obtenidos y dominio actualizado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  attempt: { $ref: '#/components/schemas/Attempt' }
+                  badgesEarned:
+                    type: array
+                    items: { $ref: '#/components/schemas/Badge' }
+                  masteryUpdates:
+                    type: array
+                    items: { $ref: '#/components/schemas/MasteryScore' }
+        '422':
+          description: Falta la respuesta metacognitiva
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /me/transparency:
+    get:
+      tags: [student]
+      summary: '¿Qué sabe NativIA de mí?'
+      description: |
+        Alimenta el panel de transparencia infantil (US-10, pantalla 10).
+        Los textos vienen del servidor, escritos a nivel de lectura de 3.º de
+        primaria, y son los mismos que se auditan en el DPIA.
+      responses:
+        '200':
+          description: Datos guardados, en lenguaje llano
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  stored:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        icon: { type: string }
+                        what: { type: string, example: Lo que hablas con el tutor }
+                        why: { type: string, example: Tu profe puede leerlo para ayudarte }
+                  neverStored:
+                    type: array
+                    items: { type: string }
+                  whoCanSee:
+                    type: array
+                    items: { type: string }
+
+  # ===========================================================================
+  # TUTOR — PROXY AL LLM
+  # ===========================================================================
+
+  /tutor/turn:
+    post:
+      tags: [tutor]
+      summary: Enviar un turno al tutor socrático
+      description: |
+        **Único punto de contacto con el LLM en todo el sistema.**
+
+        El cliente envía solo texto. El servidor inyecta el system prompt,
+        modera entrada y salida, clasifica intención, aplica presupuesto,
+        ejecuta el detector de fuga de respuesta de tres capas y registra la
+        interacción completa (`docs/04-technical-architecture.md` §4).
+
+        **Nunca** devuelve al cliente el resultado que el estudiante debe
+        encontrar: si el detector halla una fuga, se regenera; si vuelve a
+        fugar, se degrada al árbol pregrabado.
+
+        Respuestas posibles según el estado del sistema:
+
+        | Estado | `source` | Qué recibe el estudiante |
+        |---|---|---|
+        | Normal | `llm` | Respuesta socrática del modelo |
+        | Presupuesto agotado | `fallback_tree` | Árbol pregrabado, en tono amable |
+        | Fallo del proveedor | `fallback_tree` | Árbol pregrabado |
+        | Señal de riesgo | `safety` | Respuesta contenedora + adulto de confianza |
+        | Fuera de alcance | `redirect` | Redirección amable a la actividad |
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [attemptId, message, clientTurnId]
+              properties:
+                attemptId: { type: string }
+                clientTurnId: { type: string, format: uuid }
+                message:
+                  type: string
+                  maxLength: 300
+                  description: |
+                    Texto del estudiante. Límite de 300 caracteres: evita el
+                    pegado masivo de enunciados completos para que el modelo
+                    los resuelva.
+      responses:
+        '200':
+          description: Turno del tutor
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TutorTurn' }
+        '429':
+          description: Demasiados turnos en poco tiempo
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '422':
+          description: Mensaje inválido o intento no activo
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /tutor/ask-teacher:
+    post:
+      tags: [tutor]
+      summary: Escalar una duda a un adulto
+      description: |
+        Respalda el botón «Preguntar al profe», visible en toda pantalla del
+        módulo estudiante (E-08). Crea una alerta de severidad baja para el
+        docente, con el contexto de la actividad.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [attemptId]
+              properties:
+                attemptId: { type: string }
+                note: { type: string, maxLength: 300 }
+      responses:
+        '202':
+          description: Aviso enviado al docente
+
+  # ===========================================================================
+  # SINCRONIZACIÓN OFFLINE
+  # ===========================================================================
+
+  /sync/events:
+    post:
+      tags: [sync]
+      summary: Drenar la cola de eventos del dispositivo
+      description: |
+        Recibe lotes de hasta 50 eventos. **Upsert por `clientEventId`**: un
+        reintento tras una red caída no duplica nada (ADR-007).
+
+        Devuelve por evento su resultado, para que el cliente sepa exactamente
+        qué puede borrar de IndexedDB y qué debe reintentar. Un fallo parcial
+        no invalida el lote.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [events]
+              properties:
+                events:
+                  type: array
+                  maxItems: 50
+                  items: { $ref: '#/components/schemas/AttemptEventInput' }
+      responses:
+        '207':
+          description: Resultado por evento
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        clientEventId: { type: string }
+                        status: { type: string, enum: [created, duplicate, rejected] }
+                        reason: { type: string }
+
+  /sync/bundle:
+    get:
+      tags: [sync]
+      summary: Paquete de precarga para trabajar sin conexión
+      description: |
+        Devuelve las siguientes actividades del estudiante con todo lo necesario
+        para completarlas sin red: pasos, medios y —para el eje B— el árbol
+        socrático pregrabado.
+      parameters:
+        - name: activityCount
+          in: query
+          schema: { type: integer, default: 3, maximum: 10 }
+      responses:
+        '200':
+          description: Paquete de precarga
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  generatedAt: { type: string, format: date-time }
+                  activities:
+                    type: array
+                    items: { $ref: '#/components/schemas/Activity' }
+                  mediaUrls:
+                    type: array
+                    items: { type: string, format: uri }
+
+  # ===========================================================================
+  # PANEL DEL MAESTRO
+  # ===========================================================================
+
+  /classrooms/{classroomId}/overview:
+    get:
+      tags: [teacher]
+      summary: Pantalla de Inicio del panel
+      description: |
+        Devuelve exactamente lo que exige la prueba de los 60 segundos: los 3
+        estudiantes que necesitan apoyo con su motivo en lenguaje llano, los
+        extremos del grupo y las alertas accionables.
+
+        Sirve del resumen materializado (`ClassroomSummary`), nunca de una
+        agregación en vivo sobre eventos (`docs/10` §9). `computedAt` indica la
+        frescura y se muestra en pantalla.
+      parameters:
+        - $ref: '#/components/parameters/classroomId'
+      responses:
+        '200':
+          description: Resumen accionable
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  computedAt: { type: string, format: date-time }
+                  needHelpToday:
+                    type: array
+                    maxItems: 3
+                    items:
+                      type: object
+                      properties:
+                        studentProfileId: { type: string }
+                        firstName: { type: string }
+                        avatarKey: { type: string }
+                        reason:
+                          type: string
+                          description: |
+                            Conducta observable, nunca atributo del niño.
+                          example: Lleva 3 actividades aceptando lo que dice la IA sin comprobarlo.
+                        triageScore: { type: number }
+                        signalConfidence:
+                          type: string
+                          enum: [alta, media, baja]
+                          description: |
+                            Baja cuando la señal proviene del clasificador de
+                            aceptación acrítica y este aún no alcanza κ ≥ 0,75.
+                  groupHighlights:
+                    type: object
+                    properties:
+                      best: { $ref: '#/components/schemas/CompetenceHighlight' }
+                      worst: { $ref: '#/components/schemas/CompetenceHighlight' }
+                  alerts:
+                    type: array
+                    maxItems: 3
+                    items: { $ref: '#/components/schemas/TeacherAlert' }
+                  moderationPending: { type: integer }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /classrooms/{classroomId}/heatmap:
+    get:
+      tags: [teacher]
+      summary: Vista de grupo (heatmap)
+      parameters:
+        - $ref: '#/components/parameters/classroomId'
+        - name: groupBy
+          in: query
+          description: Los tres vocabularios de la misma matriz (`docs/10` §3.2)
+          schema: { type: string, enum: [axis, pisa, dba], default: axis }
+      responses:
+        '200':
+          description: Matriz estudiante × dimensión
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  columns:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        key: { type: string }
+                        label: { type: string }
+                        glossary: { type: string, description: Definición en una frase }
+                  rows:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        studentProfileId: { type: string }
+                        firstName: { type: string }
+                        avatarKey: { type: string }
+                        cells:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              key: { type: string }
+                              level:
+                                type: string
+                                enum: [sin_datos, necesita_apoyo, va_en_camino, lo_maneja_bien]
+                              opportunities:
+                                type: integer
+                                description: |
+                                  < 2 fuerza `sin_datos`. Nunca se pinta
+                                  «necesita apoyo» con una sola evidencia.
+
+  /students/{studentProfileId}/detail:
+    get:
+      tags: [teacher]
+      summary: Vista individual del estudiante
+      description: |
+        Incluye las respuestas metacognitivas **textuales, sin resumir ni
+        analizar automáticamente** (`docs/10` §6.2). Requiere una asignación
+        vigente sobre el curso del estudiante.
+      parameters:
+        - name: studentProfileId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Detalle del estudiante
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StudentDetail' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /interactions/{interactionId}/transcript:
+    get:
+      tags: [teacher]
+      summary: Transcripción completa de un diálogo
+      description: |
+        **Esta lectura escribe en `audit_log`.** Requiere
+        `canViewTranscripts` en la asignación del docente sobre ese curso.
+
+        Para el rol `coordinator`, el parámetro `reason` es obligatorio y el
+        registro de auditoría es reforzado: el acompañamiento pedagógico es
+        legítimo, ocultarlo no lo sería.
+      parameters:
+        - name: interactionId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: reason
+          in: query
+          description: Motivo del acceso. Obligatorio para `coordinator`
+          schema: { type: string, maxLength: 200 }
+      responses:
+        '200':
+          description: Transcripción
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Transcript' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /classrooms/{classroomId}/alerts:
+    get:
+      tags: [teacher]
+      summary: Listar alertas del curso
+      parameters:
+        - $ref: '#/components/parameters/classroomId'
+        - name: status
+          in: query
+          schema: { type: string, enum: [abierta, atendida, no_aplica, escalada] }
+        - name: severity
+          in: query
+          schema: { type: string, enum: [critica, media, baja] }
+        - $ref: '#/components/parameters/cursor'
+      responses:
+        '200':
+          description: Alertas
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/TeacherAlert' }
+                  nextCursor: { type: string, nullable: true }
+
+  /alerts/{alertId}/resolve:
+    post:
+      tags: [teacher]
+      summary: Resolver una alerta
+      description: |
+        `no_aplica` no es un descarte silencioso: ajusta el umbral de ese código
+        para ese docente (`docs/10` §5.2). Un motor de alertas que no aprende
+        del descarte termina ignorado.
+
+        Las alertas de severidad crítica no se auto-descartan; solo un humano
+        las cierra, y el cierre queda auditado.
+      parameters:
+        - name: alertId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [atendida, no_aplica, escalada] }
+                note: { type: string, maxLength: 500 }
+      responses:
+        '200':
+          description: Alerta resuelta
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TeacherAlert' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /lesson-plans:
+    get:
+      tags: [teacher]
+      summary: Banco de planes de clase
+      parameters:
+        - name: grade
+          in: query
+          schema: { type: integer, enum: [3, 4, 5] }
+        - name: axisCode
+          in: query
+          schema: { type: string, enum: [A, B, C, D] }
+        - name: errorType
+          in: query
+          description: Tipología de error que atiende (E1…E6)
+          schema: { type: string }
+      responses:
+        '200':
+          description: Planes de clase
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/LessonPlan' }
+
+  # ===========================================================================
+  # CONSENTIMIENTO
+  # ===========================================================================
+
+  /classrooms/{classroomId}/consents:
+    get:
+      tags: [consent]
+      summary: Estado de autorizaciones del curso
+      parameters:
+        - $ref: '#/components/parameters/classroomId'
+      responses:
+        '200':
+          description: Conteos y pendientes
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  granted: { type: integer }
+                  pending: { type: integer }
+                  revoked: { type: integer }
+                  policyVersion: { type: string }
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/ConsentRecord' }
+
+  /consents:
+    post:
+      tags: [consent]
+      summary: Registrar o actualizar una autorización
+      description: |
+        `[SUPUESTO — VALIDACIÓN JURÍDICA PENDIENTE]` El mecanismo admitido se
+        parametriza por institución. `policyVersion` es obligatorio: un cambio
+        del texto de consentimiento invalida los otorgados con la versión
+        anterior y obliga a recabarlos de nuevo.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [studentProfileId, mechanism, status, policyVersion]
+              properties:
+                studentProfileId: { type: string }
+                mechanism: { type: string, enum: [institucional, acudiente_digital, hibrido] }
+                status: { type: string, enum: [otorgado, revocado] }
+                policyVersion: { type: string }
+                guardianRelation: { type: string }
+      responses:
+        '201':
+          description: Registrado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConsentRecord' }
+
+  # ===========================================================================
+  # PRIVACIDAD
+  # ===========================================================================
+
+  /privacy/erasure-requests:
+    post:
+      tags: [privacy]
+      summary: Solicitar el ejercicio del derecho al olvido
+      description: |
+        Revocar la autorización dispara este flujo automáticamente (US-09).
+
+        Efecto: se elimina todo dato identificable del menor —incluidos turnos
+        de diálogo y respuestas metacognitivas— y se conservan únicamente
+        agregados anonimizados **no reversibles**. El `audit_log` conserva el
+        hecho del borrado, no su contenido.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [studentProfileId, requestedBy]
+              properties:
+                studentProfileId: { type: string }
+                requestedBy: { type: string, enum: [acudiente, institucion, titular] }
+                reason: { type: string }
+      responses:
+        '202':
+          description: Solicitud aceptada; ejecución en menos de 24 horas
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  requestId: { type: string }
+                  scheduledFor: { type: string, format: date-time }
+
+  /privacy/export/{studentProfileId}:
+    get:
+      tags: [privacy]
+      summary: Exportar los datos de un estudiante
+      description: Derecho de acceso del titular. Genera un registro de auditoría.
+      parameters:
+        - name: studentProfileId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Exportación en JSON
+          content:
+            application/json:
+              schema: { type: object }
+
+  # ===========================================================================
+  # SISTEMA
+  # ===========================================================================
+
+  /health:
+    get:
+      tags: [system]
+      summary: Estado del sistema
+      security: []
+      responses:
+        '200':
+          description: Estado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, enum: [ok, degraded] }
+                  database: { type: string, enum: [ok, error] }
+                  llm:
+                    type: string
+                    enum: [ok, unavailable, mock]
+                    description: |
+                      `mock` cuando `MOCK_LLM=true`: la demostración funciona
+                      sin API key y sin costo (US-12).
+                  version: { type: string }
+
+components:
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    classroomId:
+      name: classroomId
+      in: path
+      required: true
+      schema: { type: string }
+    cursor:
+      name: cursor
+      in: query
+      schema: { type: string }
+
+  responses:
+    Unauthorized:
+      description: Credenciales inválidas o ausentes
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Forbidden:
+      description: |
+        Sin permiso. Incluye el caso del rol `coordinator` intentando acceder a
+        datos individuales de un estudiante (PRD R-04, decisión permanente).
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    NotFound:
+      description: No encontrado
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+
+  schemas:
+
+    Problem:
+      type: object
+      description: RFC 9457
+      properties:
+        type: { type: string, format: uri }
+        title: { type: string }
+        status: { type: integer }
+        detail:
+          type: string
+          description: |
+            En rutas del módulo estudiante, redactado en lenguaje amable y
+            tranquilizador, sin jerga técnica y afirmando que el progreso está
+            guardado.
+        code: { type: string }
+        instance: { type: string }
+
+    StudentSession:
+      type: object
+      properties:
+        accessToken: { type: string }
+        refreshToken: { type: string }
+        expiresIn: { type: integer, example: 28800 }
+        student:
+          type: object
+          properties:
+            studentProfileId: { type: string }
+            firstName: { type: string }
+            avatarKey: { type: string }
+            grade: { type: integer }
+            a11ySettings: { type: object }
+
+    TeacherSession:
+      type: object
+      properties:
+        accessToken: { type: string }
+        refreshToken: { type: string }
+        expiresIn: { type: integer }
+        user:
+          type: object
+          properties:
+            id: { type: string }
+            firstName: { type: string }
+            lastName: { type: string }
+            role: { type: string, enum: [teacher, coordinator, admin] }
+            classrooms:
+              type: array
+              items:
+                type: object
+                properties:
+                  classroomId: { type: string }
+                  label: { type: string, example: 4.º B }
+                  assignmentRole:
+                    type: string
+                    enum: [titular, apoyo, orientacion, reemplazo, coordinacion]
+                  canViewTranscripts: { type: boolean }
+
+    AxisProgress:
+      type: object
+      properties:
+        code: { type: string, enum: [A, B, C, D] }
+        displayName: { type: string, example: Piensa con la IA }
+        colorToken: { type: string }
+        completed: { type: integer }
+        total: { type: integer }
+        offlineCapable: { type: boolean }
+        nextActivityId: { type: string, nullable: true }
+
+    ActivitySummary:
+      type: object
+      properties:
+        id: { type: string }
+        title: { type: string }
+        subject: { type: string, enum: [matematicas, lenguaje, ciencias] }
+        estimatedMinutes: { type: integer }
+        requiresNetwork:
+          type: boolean
+          description: |
+            Se informa ANTES de entrar, para que el niño no se frustre a mitad
+            de camino cuando no hay red.
+        status: { type: string, enum: [bloqueada, disponible, completada] }
+        completionQuality:
+          type: string
+          enum: [sin_ayuda, con_pistas]
+          description: El andamiaje se reconoce, no se penaliza
+
+    Activity:
+      type: object
+      description: |
+        **No incluye** `systemPromptKey` ni `forbiddenAnswers`: esos campos
+        existen solo en el servidor.
+      properties:
+        id: { type: string }
+        slug: { type: string }
+        title: { type: string }
+        axisCode: { type: string, enum: [A, B, C, D] }
+        subject: { type: string }
+        kind: { type: string, enum: [tutor_socratico, clasificacion, dilema_ramificado, comparacion] }
+        estimatedMinutes: { type: integer }
+        pisaCompetence: { type: string }
+        dbaReference: { type: string }
+        bloomLevel: { type: string }
+        payload:
+          type: object
+          description: Pasos de la actividad; forma según `kind`
+        fallbackTree:
+          type: object
+          nullable: true
+          description: |
+            Árbol socrático pregrabado. Presente solo en el eje B. Se entrega al
+            cliente para que la actividad funcione sin red o sin presupuesto
+            (ADR-005). Contiene preguntas y opciones, **nunca la respuesta**.
+
+    Attempt:
+      type: object
+      properties:
+        id: { type: string }
+        clientAttemptId: { type: string }
+        activityId: { type: string }
+        status: { type: string, enum: [en_curso, completado, abandonado] }
+        mode: { type: string, enum: [online, degradado_sin_red, degradado_sin_presupuesto, mock] }
+        startedAt: { type: string, format: date-time }
+        completedAt: { type: string, format: date-time, nullable: true }
+
+    AttemptEventInput:
+      type: object
+      required: [clientEventId, attemptId, type, occurredAt]
+      properties:
+        clientEventId: { type: string, format: uuid }
+        attemptId: { type: string }
+        type:
+          type: string
+          enum:
+            - paso_visto
+            - respuesta_enviada
+            - pista_pedida
+            - turno_tutor
+            - justificacion_enviada
+            - comprobacion_registrada
+            - abandono
+            - item_trampa_mostrado
+            - item_trampa_respondido
+        stepIndex: { type: integer }
+        payload: { type: object }
+        occurredAt: { type: string, format: date-time }
+
+    TutorTurn:
+      type: object
+      properties:
+        turnIndex: { type: integer }
+        content: { type: string }
+        source:
+          type: string
+          enum: [llm, fallback_tree, safety, redirect]
+          description: |
+            El cliente debe renderizar SIEMPRE dentro de `<AIDisclosure>`
+            (regla de lint `no-raw-ai-content`).
+        choices:
+          type: array
+          nullable: true
+          description: |
+            Presente solo con `source: fallback_tree`. Sin LLM no hay
+            comprensión de texto libre; ofrecer un campo abierto que nadie
+            interpreta sería peor que no ofrecerlo.
+          items:
+            type: object
+            properties:
+              key: { type: string }
+              label: { type: string }
+        budgetRemaining:
+          type: integer
+          description: Nunca se muestra al estudiante; es para el panel docente
+        suggestAskTeacher:
+          type: boolean
+          description: True tras 3 intentos de evasión en la sesión
+        latencyMs: { type: integer }
+
+    CompetenceHighlight:
+      type: object
+      properties:
+        label: { type: string, example: Explicar por qué una cuenta está mal }
+        axisCode: { type: string }
+        studentsAtLevel: { type: integer, example: 6 }
+        totalStudents: { type: integer, example: 32 }
+
+    TeacherAlert:
+      type: object
+      properties:
+        id: { type: string }
+        code: { type: string, enum: [A-RIESGO, A-DELEG, A-EVASION, A-INACT, A-ATASCO, A-GRUPO, A-CONSENT, A-DEGRAD] }
+        severity: { type: string, enum: [critica, media, baja] }
+        message: { type: string }
+        suggestedAction:
+          type: object
+          description: Sin acción, la alerta no se emite
+          properties:
+            type: { type: string, enum: [plan_de_clase, ver_conversacion, ver_detalle, protocolo, reenviar_comunicacion] }
+            ref: { type: string }
+            label: { type: string }
+        isContentHidden:
+          type: boolean
+          description: |
+            Las alertas críticas ocultan su contenido en el listado: la pantalla
+            del docente puede estar proyectada en el salón.
+        status: { type: string, enum: [abierta, atendida, no_aplica, escalada] }
+        studentProfileId: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+
+    StudentDetail:
+      type: object
+      properties:
+        firstName: { type: string }
+        avatarKey: { type: string }
+        summary30d:
+          type: object
+          properties:
+            attempts: { type: integer }
+            minutes: { type: integer }
+            activeDays: { type: integer }
+        topConcern:
+          type: object
+          nullable: true
+          properties:
+            errorType: { type: string, enum: [E1, E2, E3, E4, E5, E6] }
+            label: { type: string, example: Acepta sin comprobar }
+            explanation: { type: string }
+            suggestedAction: { type: object }
+        masteryByAxis:
+          type: array
+          items:
+            type: object
+            properties:
+              axisCode: { type: string }
+              level: { type: string }
+        recentInteractions:
+          type: array
+          items:
+            type: object
+            properties:
+              interactionId: { type: string }
+              activityTitle: { type: string }
+              occurredAt: { type: string, format: date-time }
+              marker: { type: string, enum: [comprobo_solo, acerto_con_pistas, acepto_sin_comprobar] }
+        metacognitionResponses:
+          type: array
+          description: Textuales, sin resumir, sin corregir ortografía
+          items:
+            type: object
+            properties:
+              text: { type: string }
+              occurredAt: { type: string, format: date-time }
+
+    Transcript:
+      type: object
+      properties:
+        interactionId: { type: string }
+        activityTitle: { type: string }
+        model: { type: string }
+        mode: { type: string }
+        startedAt: { type: string, format: date-time }
+        turns:
+          type: array
+          items:
+            type: object
+            properties:
+              turnIndex: { type: integer }
+              role: { type: string, enum: [estudiante, tutor, sistema] }
+              content: { type: string }
+              occurredAt: { type: string, format: date-time }
+              flags:
+                type: array
+                items:
+                  type: string
+                  enum: [pidio_respuesta, acepto_sin_comprobar, moderacion, modo_degradado, regenerado]
+        metacognition:
+          type: object
+          nullable: true
+          properties:
+            text: { type: string }
+        auditNotice:
+          type: string
+          example: Tu consulta de esta conversación queda registrada.
+
+    MasteryScore:
+      type: object
+      properties:
+        pisaCompetence: { type: string }
+        axisCode: { type: string }
+        probability: { type: number, minimum: 0, maximum: 1 }
+        opportunities: { type: integer }
+        level: { type: string, enum: [sin_datos, necesita_apoyo, va_en_camino, lo_maneja_bien] }
+
+    Badge:
+      type: object
+      properties:
+        slug: { type: string }
+        name: { type: string, example: Verificadora }
+        description: { type: string, example: Comprobaste una respuesta por tu cuenta }
+        iconKey: { type: string }
+
+    ConsentRecord:
+      type: object
+      properties:
+        id: { type: string }
+        studentProfileId: { type: string }
+        mechanism: { type: string, enum: [institucional, acudiente_digital, hibrido] }
+        status: { type: string, enum: [pendiente, otorgado, revocado, expirado] }
+        policyVersion: { type: string }
+        grantedAt: { type: string, format: date-time, nullable: true }
+        revokedAt: { type: string, format: date-time, nullable: true }
+
+    LessonPlan:
+      type: object
+      properties:
+        slug: { type: string }
+        title: { type: string, maxLength: 60 }
+        durationMinutes: { type: integer }
+        grades:
+          type: array
+          items: { type: integer }
+        materials:
+          type: string
+          description: Campo prioritario. «Ninguno» es el valor preferido
+          example: Ninguno
+        axisCode: { type: string }
+        pisaCompetence: { type: string }
+        addressesErrorTypes:
+          type: array
+          items: { type: string }
+        steps:
+          type: array
+          maxItems: 5
+          items: { type: string }
+        whatToObserve:
+          type: array
+          items: { type: string }
+        noTechVariant:
+          type: string
+          description: |
+            Obligatoria. Es lo que hace que el plan se use el día que el
+            internet no sirve, que es un día frecuente.
+
+# =============================================================================
+# <self_critique>
+#
+# DEBILIDAD 1 — `POST /tutor/turn` está especificado como petición-respuesta,
+# pero el requisito de rendimiento es de *primer token* en p95 < 2,5 s.
+# Un objetivo de primer token solo tiene sentido con streaming, y aquí no hay
+# ninguno definido: ni SSE, ni respuesta fragmentada, ni el contrato de cómo
+# interactúa el streaming con el post-filtro. Y ahí está el problema de fondo:
+# el detector de fuga necesita la respuesta COMPLETA para decidir, de modo que
+# emitir tokens a medida que llegan podría mostrar la respuesta al niño antes de
+# haberla validado — exactamente lo que el sistema promete impedir.
+# MITIGACIÓN: definir `POST /tutor/turn/stream` con SSE y una política explícita
+# de «retención hasta validar»: transmitir por unidades de oración, reteniendo
+# la última hasta que el detector determinístico se pronuncie, y aceptar la
+# latencia adicional del clasificador solo en el turno de cierre. Documentar el
+# compromiso y medirlo, en lugar de dejar el objetivo de rendimiento sin
+# mecanismo que lo respalde.
+#
+# DEBILIDAD 2 — La API no tiene versionado de contenido ni control de
+# concurrencia, y el modo offline lo vuelve inevitable.
+# Un dispositivo puede precargar un paquete con `/sync/bundle`, quedarse sin red
+# una semana y volver con eventos referidos a una versión de la actividad que ya
+# cambió (una corrección editorial, un ajuste de `forbiddenAnswers`). Nada en el
+# contrato detecta esa situación: los eventos se aceptarían como si
+# correspondieran al contenido vigente, contaminando el dominio y el análisis de
+# impacto. Tampoco hay ETag ni `If-Match` en ningún recurso mutable.
+# MITIGACIÓN: añadir `contentVersion` a `Activity` y exigirlo en
+# `AttemptEventInput` y al crear un intento; el servidor acepta el evento pero lo
+# marca como `staleContent` para excluirlo del análisis. Añadir ETag y
+# `If-None-Match` en `/activities/{id}` y `/sync/bundle` para que la precarga sea
+# incremental y no vuelva a descargar medios ya cacheados.
+#
+# DEBILIDAD 3 — El modelo de permisos está enunciado en prosa, no en el contrato.
+# Las reglas críticas —que `coordinator` no puede ver datos individuales, que
+# leer una transcripción exige `canViewTranscripts`, que `reason` es obligatorio
+# para coordinación— viven en descripciones en lenguaje natural que ninguna
+# herramienta puede verificar. Un generador de clientes, un validador de contrato
+# o una prueba de contrato no ven nada de eso, y la primera implementación que se
+# desvíe lo hará en silencio.
+# MITIGACIÓN: declarar ámbitos (`scopes`) explícitos en el esquema de seguridad
+# (`transcript:read`, `student:read`, `alert:resolve`, `consent:write`) y
+# aplicarlos por operación en el propio documento, de modo que la regla sea
+# verificable automáticamente; complementar con una batería de pruebas de
+# contrato que ejerza cada combinación rol × endpoint y afirme el 403 esperado.
+# Un permiso que solo existe en la documentación no es un permiso.
+#
+# </self_critique>
+# =============================================================================
