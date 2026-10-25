@@ -3,7 +3,7 @@
 // Especificación en docs/10-teacher-dashboard-spec.md §4.2.
 // =============================================================================
 
-import { prisma } from '@nativia/db';
+import { db, activeInstitutionId } from '../../shared/db.js';
 
 export interface BktParams {
   pInit: number;
@@ -63,7 +63,7 @@ export async function recordEvidence(args: {
     args.isCorrect &&
     (args.axisCode === 'A' || args.axisCode === 'B' || args.hasValidJustification);
 
-  const existing = await prisma.masteryScore.findUnique({
+  const existing = await db.masteryScore.findUnique({
     where: {
       studentProfileId_pisaCompetence: {
         studentProfileId: args.studentProfileId,
@@ -80,7 +80,7 @@ export async function recordEvidence(args: {
   const probability = bktUpdate(prior, countsAsCorrect, params);
   const opportunities = (existing?.opportunities ?? 0) + 1;
 
-  return prisma.masteryScore.upsert({
+  return db.masteryScore.upsert({
     where: {
       studentProfileId_pisaCompetence: {
         studentProfileId: args.studentProfileId,
@@ -97,6 +97,7 @@ export async function recordEvidence(args: {
       bktParams: JSON.stringify(params),
     },
     create: {
+      institutionId: activeInstitutionId(),
       studentProfileId: args.studentProfileId,
       pisaCompetence: args.pisaCompetence,
       axisCode: args.axisCode,

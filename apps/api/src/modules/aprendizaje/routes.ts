@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { prisma } from '@nativia/db';
+import { db, activeInstitutionId } from '../../shared/db.js';
 import { AXES, findActivity, METACOGNITION_QUESTION, METACOGNITION_SCAFFOLDS } from '../contenido/index.js';
 import { recordEvidence } from './mastery.js';
 
@@ -11,24 +11,24 @@ export async function aprendizajeRoutes(app: FastifyInstance) {
   app.get('/me/path', async (req) => {
     const { studentProfileId } = req.user;
 
-    const profile = await prisma.studentProfile.findUniqueOrThrow({
+    const profile = await db.studentProfile.findUniqueOrThrow({
       where: { id: studentProfileId },
       include: { user: true, classroom: true },
     });
 
-    const activities = await prisma.activity.findMany({
+    const activities = await db.activity.findMany({
       where: { isPublished: true, deletedAt: null },
       include: { axis: true },
       orderBy: { orderIndex: 'asc' },
     });
 
-    const attempts = await prisma.attempt.findMany({
+    const attempts = await db.attempt.findMany({
       where: { studentProfileId, status: 'completado', deletedAt: null },
       select: { activityId: true },
     });
     const done = new Set(attempts.map((a) => a.activityId));
 
-    const badgeCount = await prisma.studentBadge.count({ where: { studentProfileId } });
+    const badgeCount = await db.studentBadge.count({ where: { studentProfileId } });
 
     return {
       student: {
@@ -62,13 +62,13 @@ export async function aprendizajeRoutes(app: FastifyInstance) {
       .parse(req.params);
     const { studentProfileId } = req.user;
 
-    const activities = await prisma.activity.findMany({
+    const activities = await db.activity.findMany({
       where: { isPublished: true, deletedAt: null, axis: { code: axisCode } },
       include: { axis: true },
       orderBy: { orderIndex: 'asc' },
     });
 
-    const attempts = await prisma.attempt.findMany({
+    const attempts = await db.attempt.findMany({
       where: { studentProfileId, deletedAt: null },
       orderBy: { startedAt: 'desc' },
     });
@@ -101,7 +101,7 @@ export async function aprendizajeRoutes(app: FastifyInstance) {
   app.get('/activities/:activityId', async (req, reply) => {
     const { activityId } = z.object({ activityId: z.string() }).parse(req.params);
 
-    const activity = await prisma.activity.findFirst({
+    const activity = await db.activity.findFirst({
       where: { id: activityId, isPublished: true, deletedAt: null },
       include: { axis: true },
     });
@@ -146,13 +146,14 @@ export async function aprendizajeRoutes(app: FastifyInstance) {
       })
       .parse(req.body);
 
-    const existing = await prisma.attempt.findUnique({
+    const existing = await db.attempt.findUnique({
       where: { clientAttemptId: body.clientAttemptId },
     });
     if (existing) return reply.code(200).send(existing);
 
-    const attempt = await prisma.attempt.create({
+    const attempt = await db.attempt.create({
       data: {
+        institutionId: activeInstitutionId(),
         studentProfileId: req.user.studentProfileId,
         activityId,
         clientAttemptId: body.clientAttemptId,
@@ -200,7 +201,7 @@ export async function aprendizajeRoutes(app: FastifyInstance) {
       });
     }
 
-    const attempt = await prisma.attempt.findUniqueOrThrow({
+    const attempt = await db.attempt.findUniqueOrThrow({
       where: { id: attemptId },
       include: { activity: { include: { axis: true } } },
     });
@@ -208,7 +209,7 @@ export async function aprendizajeRoutes(app: FastifyInstance) {
       return reply.code(403).send({ title: 'No es tu intento', status: 403 });
     }
 
-    const updated = await prisma.attempt.update({
+    const updated = await db.attempt.update({
       where: { id: attemptId },
       data: {
         status: 'completado',
@@ -222,7 +223,7 @@ export async function aprendizajeRoutes(app: FastifyInstance) {
       },
     });
 
-    await prisma.metacognitionResponse.upsert({
+    await db.metacognitionResponse.upsert({
       where: { attemptId },
       update: {
         text: data.metacognition.text,
@@ -230,6 +231,7 @@ export async function aprendizajeRoutes(app: FastifyInstance) {
         scaffoldTags: data.metacognition.scaffoldTags.join('|') || null,
       },
       create: {
+        institutionId: activeInstitutionId(),
         attemptId,
         text: data.metacognition.text,
         inputMode: data.metacognition.inputMode,
@@ -253,7 +255,7 @@ export async function aprendizajeRoutes(app: FastifyInstance) {
 
   // ── Panel de transparencia infantil (US-10) ────────────────────────────────
   app.get('/me/transparency', async (req) => {
-    const profile = await prisma.studentProfile.findUniqueOrThrow({
+    const profile = await db.studentProfile.findUniqueOrThrow({
       where: { id: req.user.studentProfileId },
       include: {
         classroom: {
@@ -318,15 +320,17 @@ async function awardBadges(studentProfileId: string, data: { independentVerifica
   const earned: Array<{ slug: string; name: string; description: string; iconKey: string }> = [];
   if (!data.independentVerification) return earned;
 
-  const badge = await prisma.badge.findUnique({ where: { slug: 'verificador' } });
+  const badge = await db.badge.findUnique({ where: { slug: 'verificador' } });
   if (!badge) return earned;
 
-  const already = await prisma.studentBadge.findUnique({
+  const already = await db.studentBadge.findUnique({
     where: { studentProfileId_badgeId: { studentProfileId, badgeId: badge.id } },
   });
   if (already) return earned;
 
-  await prisma.studentBadge.create({ data: { studentProfileId, badgeId: badge.id } });
+  await db.studentBadge.create({
+    data: { institutionId: activeInstitutionId(), studentProfileId, badgeId: badge.id },
+  });
   earned.push({
     slug: badge.slug,
     name: badge.name,

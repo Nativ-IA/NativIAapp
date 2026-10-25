@@ -225,6 +225,14 @@ El esquema es único, con las diferencias de motor aisladas.
 - 🔁 **Migración:** cambiar `provider`, regenerar migraciones, migrar datos con un script. Estimado en
   1–2 días si la restricción de tipos portables se respetó.
 
+**Actualización (2026-10-25).** Migrado a PostgreSQL: Lakebase Postgres en Neon, una rama por
+entorno (`production` para la demo en Cloud Run, `dev` y una por integrante para trabajar en
+local). Sin Docker ni Postgres instalados: cada quien trabaja contra su rama. Los tipos portables se
+conservan; pasar a `enum` y `Json` nativos queda como una migración más. En la misma entrega, el
+esquema pasó a **multi-colegio** en una sola base: toda tabla con datos de un colegio lleva
+`institutionId`, y `apps/api/src/shared/db.ts` filtra cada consulta por el colegio del token
+(ver `apps/api/src/modules/README.md`).
+
 ---
 
 ### ADR-003 · PWA en vez de aplicación nativa

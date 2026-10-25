@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { prisma } from '@nativia/db';
+import { db } from '../../shared/db.js';
 import { AXES } from '../contenido/index.js';
 import { computeTriage } from './triage.js';
 import { audit } from '../privacidad/index.js';
@@ -19,13 +19,13 @@ export async function analiticaRoutes(app: FastifyInstance) {
 
     const triage = await computeTriage(classroomId);
 
-    const alerts = await prisma.teacherAlert.findMany({
+    const alerts = await db.teacherAlert.findMany({
       where: { classroomId, status: 'abierta', deletedAt: null },
       orderBy: [{ severity: 'asc' }, { createdAt: 'desc' }],
       take: 3, // techo de 3: diez alertas equivalen a ninguna
     });
 
-    const moderationPending = await prisma.teacherAlert.count({
+    const moderationPending = await db.teacherAlert.count({
       where: { classroomId, code: 'A-RIESGO', status: 'abierta' },
     });
 
@@ -45,7 +45,7 @@ export async function analiticaRoutes(app: FastifyInstance) {
     const { classroomId } = z.object({ classroomId: z.string() }).parse(req.params);
     if (!(await canAccessClassroom(req.user.sub, classroomId))) return forbidden(reply);
 
-    const students = await prisma.studentProfile.findMany({
+    const students = await db.studentProfile.findMany({
       where: { classroomId, deletedAt: null },
       include: { user: true, mastery: true },
       orderBy: { createdAt: 'asc' },
@@ -82,7 +82,7 @@ export async function analiticaRoutes(app: FastifyInstance) {
       .object({ studentProfileId: z.string() })
       .parse(req.params);
 
-    const profile = await prisma.studentProfile.findUniqueOrThrow({
+    const profile = await db.studentProfile.findUniqueOrThrow({
       where: { id: studentProfileId },
       include: { user: true, mastery: true },
     });
@@ -91,7 +91,7 @@ export async function analiticaRoutes(app: FastifyInstance) {
     }
 
     const since = new Date(Date.now() - 30 * 86_400_000);
-    const attempts = await prisma.attempt.findMany({
+    const attempts = await db.attempt.findMany({
       where: { studentProfileId, startedAt: { gte: since }, deletedAt: null },
       include: { activity: true, interaction: true, metacognition: true },
       orderBy: { startedAt: 'desc' },
@@ -147,7 +147,7 @@ export async function analiticaRoutes(app: FastifyInstance) {
     const { interactionId } = z.object({ interactionId: z.string() }).parse(req.params);
     const query = z.object({ reason: z.string().max(200).optional() }).parse(req.query);
 
-    const interaction = await prisma.lLMInteraction.findUniqueOrThrow({
+    const interaction = await db.lLMInteraction.findUniqueOrThrow({
       where: { id: interactionId },
       include: {
         turns: { orderBy: { turnIndex: 'asc' } },
@@ -156,7 +156,7 @@ export async function analiticaRoutes(app: FastifyInstance) {
       },
     });
 
-    const assignment = await prisma.classroomAssignment.findFirst({
+    const assignment = await db.classroomAssignment.findFirst({
       where: {
         userId: req.user.sub,
         classroomId: interaction.studentProfile.classroomId,
@@ -223,7 +223,7 @@ export async function analiticaRoutes(app: FastifyInstance) {
       })
       .parse(req.query);
 
-    const items = await prisma.teacherAlert.findMany({
+    const items = await db.teacherAlert.findMany({
       where: { classroomId, deletedAt: null, ...(q.status ? { status: q.status } : {}) },
       orderBy: [{ severity: 'asc' }, { createdAt: 'desc' }],
       take: 50,
@@ -241,8 +241,8 @@ export async function analiticaRoutes(app: FastifyInstance) {
       })
       .parse(req.body);
 
-    const alert = await prisma.teacherAlert.findUniqueOrThrow({ where: { id: alertId } });
-    const assignment = await prisma.classroomAssignment.findFirst({
+    const alert = await db.teacherAlert.findUniqueOrThrow({ where: { id: alertId } });
+    const assignment = await db.classroomAssignment.findFirst({
       where: { userId: req.user.sub, classroomId: alert.classroomId, deletedAt: null },
     });
     if (!assignment) return forbidden(reply);
@@ -253,7 +253,7 @@ export async function analiticaRoutes(app: FastifyInstance) {
       return forbidden(reply);
     }
 
-    const updated = await prisma.teacherAlert.update({
+    const updated = await db.teacherAlert.update({
       where: { id: alertId },
       data: {
         status: body.status,
@@ -302,11 +302,11 @@ function serializeAlert(a: any) {
 
 /** Extremos, no promedio: el promedio del grupo no sugiere ninguna acción. */
 async function computeHighlights(classroomId: string) {
-  const scores = await prisma.masteryScore.findMany({
+  const scores = await db.masteryScore.findMany({
     where: { studentProfile: { classroomId }, opportunities: { gte: 2 } },
   });
 
-  const total = await prisma.studentProfile.count({
+  const total = await db.studentProfile.count({
     where: { classroomId, deletedAt: null },
   });
 

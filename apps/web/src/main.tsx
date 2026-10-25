@@ -12,6 +12,11 @@ import { TransparencyPage } from './pages/TransparencyPage';
 import { TeacherLoginPage, TeacherDashboardPage } from './pages/TeacherPages';
 import { TeacherGroupPage } from './pages/TeacherGroupPage';
 import { StudentDetailPage } from './pages/StudentDetailPage';
+import { AdminLoginPage } from './pages/admin/AdminLoginPage';
+import { AdminSchoolsPage } from './pages/admin/AdminSchoolsPage';
+import { AdminSchoolPage } from './pages/admin/AdminSchoolPage';
+import { AdminUsagePage } from './pages/admin/AdminUsagePage';
+import { AdminAuditPage } from './pages/admin/AdminAuditPage';
 import { StudentShell } from './components/AppShell';
 import { EmptyState } from './components/ui';
 
@@ -45,6 +50,13 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         <Route path="/profe/panel" element={<TeacherDashboardPage />} />
         <Route path="/profe/grupo" element={<TeacherGroupPage />} />
         <Route path="/profe/estudiante/:studentProfileId" element={<StudentDetailPage />} />
+
+        {/* Equipo de plataforma */}
+        <Route path="/admin/entrar" element={<AdminLoginPage />} />
+        <Route path="/admin" element={<AdminSchoolsPage />} />
+        <Route path="/admin/colegios/:schoolId" element={<AdminSchoolPage />} />
+        <Route path="/admin/consumo" element={<AdminUsagePage />} />
+        <Route path="/admin/auditoria" element={<AdminAuditPage />} />
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

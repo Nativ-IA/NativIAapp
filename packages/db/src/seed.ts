@@ -4,6 +4,11 @@
 // REGLA OPERATIVA INNEGOCIABLE: ningún dato real de un menor entra a este
 // prototipo. Todo lo que sigue es sintético (docs/09-security-privacy-plan.md
 // §7.1). Los nombres son inventados y no corresponden a personas reales.
+//
+// El seed REINICIA la base: vacía todas las tablas y vuelve a crear la demo.
+// Se puede correr cuantas veces se quiera; siempre deja el mismo estado limpio.
+//   pnpm db:seed                → la rama de Neon de tu .env (dev)
+//   pnpm demo:reset:production  → la rama production (la demo en Cloud Run)
 // =============================================================================
 
 import { PrismaClient } from '@prisma/client';
@@ -21,6 +26,13 @@ const DEMO_STUDENTS = [
   { firstName: 'Mateo', lastName: 'R.', avatarKey: 'abeja' },
   { firstName: 'Elena', lastName: 'M.', avatarKey: 'perezoso' },
   { firstName: 'Diego', lastName: 'S.', avatarKey: 'rana' },
+];
+
+/** Estudiantes del segundo colegio: sirven para mostrar que no se mezclan. */
+const OTHER_SCHOOL_STUDENTS = [
+  { firstName: 'Valentina', lastName: 'C.', avatarKey: 'guacamaya' },
+  { firstName: 'Samuel', lastName: 'P.', avatarKey: 'jaguar' },
+  { firstName: 'Isabella', lastName: 'T.', avatarKey: 'mariposa' },
 ];
 
 const BADGES = [
@@ -58,55 +70,62 @@ const BADGES = [
   },
 ];
 
-async function main() {
-  console.log('Sembrando datos de demostración...\n');
+interface DemoSchool {
+  name: string;
+  daneCode: string;
+  campus: string;
+  grade: number;
+  section: string;
+  joinCode: string;
+  teacher: { firstName: string; lastName: string; email: string };
+  students: Array<{ firstName: string; lastName: string; avatarKey: string }>;
+  /** PIN gráfico de demostración: las mismas 3 imágenes para todos, para que
+   *  la demo sea usable. En producción cada niño elige el suyo (ADR-009). */
+  pinHash: string;
+  teacherPasswordHash: string;
+}
 
-  // --- Organización escolar ------------------------------------------------
-  const institution = await prisma.institution.upsert({
-    where: { daneCode: 'DEMO-0001' },
-    update: {},
-    create: {
-      name: 'IED de Demostración',
-      daneCode: 'DEMO-0001',
-      city: 'Bogotá D.C.',
-      sector: 'oficial',
-    },
+/** Crea un colegio con un curso, su docente titular y sus estudiantes. Todo
+ *  registro lleva el institutionId del colegio (multi-colegio). */
+async function crearColegio(c: DemoSchool) {
+  const institution = await prisma.institution.create({
+    data: { name: c.name, daneCode: c.daneCode, city: 'Bogotá D.C.', sector: 'oficial' },
   });
+  const institutionId = institution.id;
 
   const campus = await prisma.campus.create({
-    data: { institutionId: institution.id, name: 'Sede A' },
+    data: { institutionId, name: c.campus },
   });
 
   const classroom = await prisma.classroom.create({
     data: {
+      institutionId,
       campusId: campus.id,
-      grade: 4,
+      grade: c.grade,
       shift: 'manana',
-      section: 'B',
+      section: c.section,
       year: 2026,
       // Sin O/0, I/1/l, S/5: caracteres sin ambigüedad visual.
-      joinCode: '4B7K',
+      joinCode: c.joinCode,
       joinCodeExpires: new Date(Date.now() + 365 * 24 * 3600 * 1000),
       studyArm: 'tratamiento',
     },
   });
-  console.log(`  Curso 4.º B creado — código de ingreso: ${classroom.joinCode}`);
 
-  // --- Docente --------------------------------------------------------------
-  const teacherPassword = await argon2.hash('demo1234');
   const teacher = await prisma.user.create({
     data: {
-      institutionId: institution.id,
+      institutionId,
       role: 'teacher',
-      firstName: 'Luz Mery',
-      lastName: 'Prieto',
-      email: 'docente@demo.local',
-      passwordHash: teacherPassword,
+      firstName: c.teacher.firstName,
+      lastName: c.teacher.lastName,
+      email: c.teacher.email,
+      passwordHash: c.teacherPasswordHash,
     },
   });
 
   await prisma.classroomAssignment.create({
     data: {
+      institutionId,
       userId: teacher.id,
       classroomId: classroom.id,
       role: 'titular',
@@ -114,21 +133,10 @@ async function main() {
       canResolveRiskAlerts: true,
     },
   });
-  console.log('  Docente: docente@demo.local / demo1234');
 
-  // --- Estudiantes ----------------------------------------------------------
-  // PIN gráfico de demostración: las mismas 3 imágenes para todos, para que la
-  // demo sea usable. En producción cada niño elige el suyo (ADR-009).
-  const demoPinHash = await argon2.hash('brote|arepa|montana');
-
-  for (const [i, s] of DEMO_STUDENTS.entries()) {
+  for (const s of c.students) {
     const user = await prisma.user.create({
-      data: {
-        institutionId: institution.id,
-        role: 'student',
-        firstName: s.firstName,
-        lastName: s.lastName,
-      },
+      data: { institutionId, role: 'student', firstName: s.firstName, lastName: s.lastName },
     });
 
     // Elena queda SIN consentimiento a propósito: demuestra que la cuenta
@@ -137,10 +145,11 @@ async function main() {
 
     const profile = await prisma.studentProfile.create({
       data: {
+        institutionId,
         userId: user.id,
         classroomId: classroom.id,
         avatarKey: s.avatarKey,
-        graphicPinHash: demoPinHash,
+        graphicPinHash: c.pinHash,
         isUnlocked: hasConsent,
         a11ySettings: JSON.stringify({
           textScale: 1.0,
@@ -153,6 +162,7 @@ async function main() {
 
     await prisma.consentRecord.create({
       data: {
+        institutionId,
         studentProfileId: profile.id,
         mechanism: 'hibrido',
         status: hasConsent ? 'otorgado' : 'pendiente',
@@ -168,6 +178,7 @@ async function main() {
 
     await prisma.tokenBudget.create({
       data: {
+        institutionId,
         studentProfileId: profile.id,
         period: new Date().toISOString().slice(0, 7),
         limitTokens: Number(process.env.STUDENT_MONTHLY_TOKEN_LIMIT ?? 60000),
@@ -177,9 +188,82 @@ async function main() {
         isExhausted: s.firstName === 'Mateo',
       },
     });
-
-    if (i === 0) console.log(`  ${DEMO_STUDENTS.length} estudiantes creados`);
   }
+
+  console.log(
+    `  ${c.name}: curso ${c.grade}.º ${c.section} (código ${c.joinCode}), ` +
+      `${c.students.length} estudiantes, docente ${c.teacher.email}`,
+  );
+}
+
+/** Vacía todas las tablas de la app (no la de migraciones). */
+async function resetDemo() {
+  const tables = await prisma.$queryRaw<Array<{ tablename: string }>>`
+    SELECT tablename FROM pg_tables
+    WHERE schemaname = current_schema() AND tablename <> '_prisma_migrations'`;
+  if (tables.length === 0) return;
+  const list = tables.map((t) => `"${t.tablename}"`).join(', ');
+  await prisma.$executeRawUnsafe(`TRUNCATE TABLE ${list} CASCADE`);
+}
+
+function databaseHost(): string {
+  try {
+    return new URL(process.env.DATABASE_URL ?? '').host || '(sin DATABASE_URL)';
+  } catch {
+    return '(DATABASE_URL inválida)';
+  }
+}
+
+async function main() {
+  console.log(`Reiniciando la demo en ${databaseHost()}...\n`);
+  await resetDemo();
+
+  // --- Colegios de demostración -------------------------------------------
+  // Dos colegios para mostrar el multi-colegio: cada docente ve solo su curso,
+  // y un código de ingreso lleva solo a los estudiantes de su colegio.
+  const pinHash = await argon2.hash('brote|arepa|montana');
+  const teacherPasswordHash = await argon2.hash('demo1234');
+
+  await crearColegio({
+    name: 'IED de Demostración',
+    daneCode: 'DEMO-0001',
+    campus: 'Sede A',
+    grade: 4,
+    section: 'B',
+    joinCode: '4B7K',
+    teacher: { firstName: 'Luz Mery', lastName: 'Prieto', email: 'docente@demo.local' },
+    students: DEMO_STUDENTS,
+    pinHash,
+    teacherPasswordHash,
+  });
+
+  await crearColegio({
+    name: 'Colegio Distrital Los Cerezos (demo)',
+    daneCode: 'DEMO-0002',
+    campus: 'Sede principal',
+    grade: 5,
+    section: 'A',
+    joinCode: '7HWM',
+    teacher: { firstName: 'Hernán', lastName: 'Rojas', email: 'docente2@demo.local' },
+    students: OTHER_SCHOOL_STUDENTS,
+    pinHash,
+    teacherPasswordHash,
+  });
+
+  // --- Equipo de plataforma ------------------------------------------------
+  // Rol admin SIN colegio: entra al panel de administración (/admin) y no ve
+  // datos de los niños (docs/09 §7.2).
+  await prisma.user.create({
+    data: {
+      institutionId: null,
+      role: 'admin',
+      firstName: 'Equipo',
+      lastName: 'NativIA',
+      email: 'admin@nativia.local',
+      passwordHash: teacherPasswordHash,
+    },
+  });
+  console.log('  Equipo de plataforma: admin@nativia.local');
 
   // --- Ejes -----------------------------------------------------------------
   for (const axis of AXES) {
@@ -259,8 +343,9 @@ async function main() {
   console.log(`  ${BADGES.length} logros creados`);
 
   console.log('\nListo.');
-  console.log('  Estudiante  → código de curso 4B7K, elige tu avatar');
-  console.log('  Docente     → docente@demo.local / demo1234');
+  console.log('  Estudiante  → código de curso 4B7K (o 7HWM, el otro colegio), elige tu avatar');
+  console.log('  Docente     → docente@demo.local o docente2@demo.local / demo1234');
+  console.log('  Plataforma  → /admin con admin@nativia.local / demo1234');
   console.log('  Elena M. no puede entrar: no tiene autorización del acudiente.');
   console.log('  Mateo R. tiene el presupuesto agotado: verás el modo degradado.');
 }

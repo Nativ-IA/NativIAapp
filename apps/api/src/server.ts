@@ -11,9 +11,10 @@ import fastifyStatic from '@fastify/static';
 import { existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { prisma } from '@nativia/db';
 import { config, llmMode } from './shared/config.js';
 import { registerAuth } from './shared/auth.js';
+import { registerTenantContext } from './shared/tenant.js';
+import { dbGlobal } from './shared/db.js';
 import { identidadRoutes } from './modules/identidad/index.js';
 import { aprendizajeRoutes } from './modules/aprendizaje/index.js';
 import { tutorRoutes } from './modules/tutor/index.js';
@@ -38,13 +39,28 @@ export async function buildServer() {
 
   // En producción front y API comparten origen, así que no hace falta CORS.
   await app.register(cors, { origin: !isProduction, credentials: true });
+  // Primero el contexto por petición: las guardas de auth escriben en él.
+  await registerTenantContext(app);
   await registerAuth(app);
   await app.register(rateLimit, { global: false });
+
+  // Datos de entrada inválidos (zod): 400 con un detalle legible, no un 500.
+  app.setErrorHandler((error, _req, reply) => {
+    if (error instanceof Error && error.name === 'ZodError') {
+      const issue = (error as any).issues?.[0];
+      return reply.code(400).type('application/problem+json').send({
+        title: 'Datos inválidos',
+        status: 400,
+        detail: issue ? `${issue.path?.join('.') || 'dato'}: ${issue.message}` : undefined,
+      });
+    }
+    return reply.send(error);
+  });
 
   app.get('/v1/health', async () => {
     let database: 'ok' | 'error' = 'ok';
     try {
-      await prisma.$queryRaw`SELECT 1`;
+      await dbGlobal.$queryRaw`SELECT 1`;
     } catch {
       database = 'error';
     }
@@ -64,7 +80,7 @@ export async function buildServer() {
     await v1.register(tutorRoutes);
     await v1.register(analiticaRoutes);
     await v1.register(privacidadRoutes);
-    await v1.register(plataformaRoutes); // reservado: panel del equipo
+    await v1.register(plataformaRoutes); // panel del equipo (/v1/admin)
     await v1.register(natiRoutes); // reservado: asistente Nati
   }, { prefix: '/v1' });
 

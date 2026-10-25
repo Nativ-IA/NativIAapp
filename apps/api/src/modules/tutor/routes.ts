@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { prisma } from '@nativia/db';
+import { db, activeInstitutionId } from '../../shared/db.js';
 import { config } from '../../shared/config.js';
 import { handleTurn } from './service.js';
 
@@ -71,13 +71,14 @@ export async function tutorRoutes(app: FastifyInstance) {
       .object({ attemptId: z.string(), note: z.string().max(300).optional() })
       .parse(req.body);
 
-    const attempt = await prisma.attempt.findUniqueOrThrow({
+    const attempt = await db.attempt.findUniqueOrThrow({
       where: { id: body.attemptId },
       include: { studentProfile: true, activity: true },
     });
 
-    await prisma.teacherAlert.create({
+    await db.teacherAlert.create({
       data: {
+        institutionId: activeInstitutionId(),
         classroomId: attempt.studentProfile.classroomId,
         studentProfileId: attempt.studentProfileId,
         code: 'A-EVASION',

@@ -41,12 +41,20 @@ module.exports = {
       to: { circular: true },
     },
     {
+      name: 'base-solo-por-shared-db',
+      comment:
+        'La base se usa a través de shared/db.ts, que filtra por colegio. Nadie más importa @nativia/db.',
+      severity: 'error',
+      from: { path: '^src/', pathNot: '^src/shared/db\\.ts$' },
+      to: { path: 'packages/db/' },
+    },
+    {
       name: 'tablas-solo-desde-repo',
       comment:
         'Deuda conocida: solo el repo.ts de cada módulo debería tocar la base de datos.',
       severity: 'warn',
-      from: { path: '^src/', pathNot: ['/repo\\.ts$', '^src/server\\.ts$'] },
-      to: { path: 'packages/db/' },
+      from: { path: '^src/modules/', pathNot: '/repo\\.ts$' },
+      to: { path: '^src/shared/db\\.ts$' },
     },
   ],
   options: {

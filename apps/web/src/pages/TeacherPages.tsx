@@ -42,6 +42,12 @@ export function TeacherLoginPage() {
     try {
       const res = await api.post<TeacherSession>('/auth/teacher', { email, password });
       setToken(res.accessToken);
+      // El equipo de plataforma no tiene cursos: su panel es otro.
+      if (res.user.role === 'admin') {
+        localStorage.setItem('nativia.admin', JSON.stringify(res.user));
+        nav('/admin');
+        return;
+      }
       localStorage.setItem('nativia.teacher', JSON.stringify(res.user));
       nav('/profe/panel');
     } catch (err) {

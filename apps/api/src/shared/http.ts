@@ -7,3 +7,11 @@ export function forbidden(reply: any) {
     status: 403,
   });
 }
+
+/** Respuesta de error con detalle legible para quien usa la pantalla. */
+export function problem(reply: any, status: number, title: string, detail?: string) {
+  return reply
+    .code(status)
+    .type('application/problem+json')
+    .send({ title, status, ...(detail ? { detail } : {}) });
+}

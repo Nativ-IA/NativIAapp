@@ -5,12 +5,12 @@
 // Es la contraparte de haberle dicho al niño que su docente puede leerla
 // (docs/09-security-privacy-plan.md §8, docs/10 §7).
 //
-// En SQLite la inmutabilidad es garantía de capa de aplicación: no existe
-// ninguna función de actualización ni de borrado sobre esta tabla. En
-// PostgreSQL se refuerza con un trigger (ver notas de migración del esquema).
+// La inmutabilidad es, por ahora, garantía de capa de aplicación: no existe
+// ninguna función de actualización ni de borrado sobre esta tabla. Falta el
+// trigger de PostgreSQL que la refuerce (ver notas de migración del esquema).
 // =============================================================================
 
-import { prisma } from '@nativia/db';
+import { db } from '../../shared/db.js';
 
 export type AuditAction =
   | 'consulta_transcripcion'
@@ -20,7 +20,17 @@ export type AuditAction =
   | 'borrado_derecho_olvido'
   | 'cambio_rol'
   | 'ingreso_anomalo'
-  | 'cambio_modelo_llm';
+  | 'cambio_modelo_llm'
+  // Panel de administración del equipo de plataforma
+  | 'creacion_colegio'
+  | 'creacion_sede'
+  | 'creacion_curso'
+  | 'cambio_codigo_ingreso'
+  | 'creacion_cuenta'
+  | 'asignacion_curso'
+  | 'activacion_cuenta'
+  | 'desactivacion_cuenta'
+  | 'restablecimiento_contrasena';
 
 export async function audit(args: {
   actorId: string | null;
@@ -31,7 +41,7 @@ export async function audit(args: {
   reason?: string;
   context?: Record<string, unknown>;
 }): Promise<void> {
-  await prisma.auditLog.create({
+  await db.auditLog.create({
     data: {
       actorId: args.actorId,
       action: args.action,

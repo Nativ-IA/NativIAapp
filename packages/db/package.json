@@ -5,14 +5,18 @@
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
-  "//": "Un solo .env en la raíz del monorepo. dotenv-cli lo inyecta aquí porque Prisma lo busca relativo al cwd, no a la raíz del workspace.",
+  "//": "Un solo .env en la raíz del monorepo. dotenv-cli lo inyecta aquí porque Prisma lo busca relativo al cwd, no a la raíz del workspace. Los scripts *:production leen .env.neon-production (la rama production de Neon, la de la demo en Cloud Run).",
   "scripts": {
     "generate": "dotenv -e ../../.env -- prisma generate --schema=./schema.prisma",
-    "push": "dotenv -e ../../.env -- prisma db push --schema=./schema.prisma",
     "migrate": "dotenv -e ../../.env -- prisma migrate dev --schema=./schema.prisma",
     "studio": "dotenv -e ../../.env -- prisma studio --schema=./schema.prisma",
     "seed": "dotenv -e ../../.env -- tsx src/seed.ts",
-    "reset": "dotenv -e ../../.env -- prisma migrate reset --force --schema=./schema.prisma"
+    "reset": "dotenv -e ../../.env -- prisma migrate reset --force --schema=./schema.prisma",
+    "deploy:production": "dotenv -e ../../.env.neon-production -- prisma migrate deploy --schema=./schema.prisma",
+    "seed:production": "dotenv -e ../../.env.neon-production -- tsx src/seed.ts"
+  },
+  "prisma": {
+    "seed": "tsx src/seed.ts"
   },
   "dependencies": {
     "@nativia/content": "workspace:*",

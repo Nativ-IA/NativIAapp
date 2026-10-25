@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { prisma } from '@nativia/db';
+import { db } from '../../shared/db.js';
 import { canAccessClassroom } from '../instituciones/index.js';
 import { forbidden } from '../../shared/http.js';
 
@@ -12,7 +12,7 @@ export async function privacidadRoutes(app: FastifyInstance) {
     const { classroomId } = z.object({ classroomId: z.string() }).parse(req.params);
     if (!(await canAccessClassroom(req.user.sub, classroomId))) return forbidden(reply);
 
-    const students = await prisma.studentProfile.findMany({
+    const students = await db.studentProfile.findMany({
       where: { classroomId, deletedAt: null },
       include: {
         user: true,

@@ -1,7 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import argon2 from 'argon2';
-import { prisma } from '@nativia/db';
+// El ingreso ocurre antes de saber el colegio: usa dbGlobal (shared/db.ts).
+import { dbGlobal } from '../../shared/db.js';
 
 export async function identidadRoutes(app: FastifyInstance) {
   // ── Paso 1 del ingreso del estudiante ──────────────────────────────────────
@@ -10,7 +11,7 @@ export async function identidadRoutes(app: FastifyInstance) {
       .object({ joinCode: z.string().length(4) })
       .parse(req.params);
 
-    const classroom = await prisma.classroom.findFirst({
+    const classroom = await dbGlobal.classroom.findFirst({
       where: { joinCode: joinCode.toUpperCase(), deletedAt: null },
       include: {
         students: {
@@ -76,7 +77,7 @@ export async function identidadRoutes(app: FastifyInstance) {
       })
       .parse(req.body);
 
-    const profile = await prisma.studentProfile.findFirst({
+    const profile = await dbGlobal.studentProfile.findFirst({
       where: { id: body.studentProfileId, deletedAt: null },
       include: { user: true, classroom: true },
     });
@@ -120,13 +121,14 @@ export async function identidadRoutes(app: FastifyInstance) {
       {
         sub: profile.userId,
         role: 'student',
+        institutionId: profile.institutionId,
         studentProfileId: profile.id,
         classroomId: profile.classroomId,
       },
       { expiresIn: '8h' },
     );
 
-    await prisma.user.update({
+    await dbGlobal.user.update({
       where: { id: profile.userId },
       data: { lastLoginAt: new Date() },
     });
@@ -150,7 +152,7 @@ export async function identidadRoutes(app: FastifyInstance) {
       .object({ email: z.string().email(), password: z.string().min(1) })
       .parse(req.body);
 
-    const user = await prisma.user.findFirst({
+    const user = await dbGlobal.user.findFirst({
       where: { email: body.email, deletedAt: null, isActive: true },
       include: {
         assignments: {
@@ -168,12 +170,14 @@ export async function identidadRoutes(app: FastifyInstance) {
       });
     }
 
+    // El colegio viaja en el token: con él las guardas fijan el colegio activo
+    // de cada petición. Sin colegio solo queda el equipo de plataforma.
     const accessToken = app.jwt.sign(
-      { sub: user.id, role: user.role },
+      { sub: user.id, role: user.role, institutionId: user.institutionId ?? undefined },
       { expiresIn: '12h' },
     );
 
-    await prisma.user.update({
+    await dbGlobal.user.update({
       where: { id: user.id },
       data: { lastLoginAt: new Date() },
     });

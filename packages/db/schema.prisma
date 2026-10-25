@@ -3,9 +3,11 @@
 // =============================================================================
 // Alfabetización crítica en IA para primaria (3.º–5.º) · Bogotá D.C.
 //
-// RESTRICCIONES DE PORTABILIDAD (ver ADR-002 en docs/04-technical-architecture.md)
-// El prototipo corre sobre SQLite; el objetivo es PostgreSQL 16. Para que la
-// migración sea mecánica, este esquema usa SOLO tipos portables:
+// MOTOR (ver ADR-002 en docs/04-technical-architecture.md)
+// PostgreSQL (Lakebase Postgres en Neon) desde 2026-10-25; antes, SQLite. Los
+// cambios de esquema se hacen con migraciones (packages/db/migrations), nunca
+// a mano contra la base. El esquema conserva SOLO tipos portables, para que
+// pasar a enum/Json nativos sea una migración más y no una reescritura:
 //   · Sin `enum`      → String + comentario con los valores admitidos + @@index
 //   · Sin `Json`      → String con JSON serializado + comentario de su forma
 //   · Sin arreglos    → tabla de unión o String separado por comas (documentado)
@@ -30,9 +32,11 @@ generator client {
 }
 
 datasource db {
-  // Prototipo local. Para producción: provider = "postgresql"
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  // La app usa la conexión con pooler (PgBouncer). Las migraciones usan la
+  // directa: Prisma Migrate falla a través del pooler.
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DATABASE_URL_UNPOOLED")
 }
 
 // =============================================================================
@@ -40,16 +44,33 @@ datasource db {
 // =============================================================================
 
 model Institution {
-  id        String  @id @default(cuid())
-  name      String
+  id       String  @id @default(cuid())
+  name     String
   /// Código DANE. Puerto de integración con SIMAT (ADR-010); opcional en el prototipo.
-  daneCode  String? @unique
-  city      String  @default("Bogotá D.C.")
+  daneCode String? @unique
+  city     String  @default("Bogotá D.C.")
   /// "oficial" | "no_oficial"
-  sector    String  @default("oficial")
+  sector   String  @default("oficial")
 
-  campuses  Campus[]
-  users     User[]
+  campuses Campus[]
+  users    User[]
+
+  // Todo dato de un colegio cuelga de aquí (multi-colegio).
+  classrooms             Classroom[]
+  classroomAssignments   ClassroomAssignment[]
+  studentProfiles        StudentProfile[]
+  consentRecords         ConsentRecord[]
+  attempts               Attempt[]
+  attemptEvents          AttemptEvent[]
+  metacognitionResponses MetacognitionResponse[]
+  llmInteractions        LLMInteraction[]
+  llmTurns               LLMTurn[]
+  tokenBudgets           TokenBudget[]
+  masteryScores          MasteryScore[]
+  studentBadges          StudentBadge[]
+  teacherAlerts          TeacherAlert[]
+  classroomSummaries     ClassroomSummary[]
+  auditEntries           AuditLog[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -79,7 +100,10 @@ model Campus {
 /// Curso concreto: sede + grado + jornada + letra. Es la unidad de asignación
 /// del estudio de impacto (ver docs/14-evaluation-framework.md §4.1).
 model Classroom {
-  id       String @id @default(cuid())
+  id            String @id @default(cuid())
+  /// Colegio dueño del dato (multi-colegio). Lo pone apps/api/src/shared/db.ts.
+  institutionId String
+
   campusId String
   /// 3 | 4 | 5 — grado de primaria
   grade    Int
@@ -91,7 +115,7 @@ model Classroom {
 
   /// Código de 4 caracteres para el ingreso del estudiante (pantalla 1).
   /// Excluye O/0, I/1/l, S/5 por ambigüedad visual.
-  joinCode        String   @unique
+  joinCode        String    @unique
   /// El código solo es válido dentro de esta ventana (mitigación ADR-009).
   joinCodeExpires DateTime?
 
@@ -103,6 +127,7 @@ model Classroom {
   assignments ClassroomAssignment[]
   alerts      TeacherAlert[]
   summaries   ClassroomSummary[]
+  institution Institution           @relation(fields: [institutionId], references: [id])
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -111,6 +136,7 @@ model Classroom {
   @@unique([campusId, grade, shift, section, year])
   @@index([joinCode])
   @@index([studyArm])
+  @@index([institutionId])
   @@map("classrooms")
 }
 
@@ -123,25 +149,25 @@ model User {
   institutionId String?
 
   /// "student" | "teacher" | "coordinator" | "admin"
-  role          String
+  role String
 
-  firstName     String
-  lastName      String
+  firstName String
+  lastName  String
 
   /// Solo para adultos. Un estudiante NUNCA tiene email ni passwordHash:
   /// entra con joinCode + avatar + PIN gráfico (ADR-009).
-  email         String? @unique
-  passwordHash  String?
-  mfaSecret     String?
+  email        String? @unique
+  passwordHash String?
+  mfaSecret    String?
 
-  isActive      Boolean   @default(true)
-  lastLoginAt   DateTime?
+  isActive    Boolean   @default(true)
+  lastLoginAt DateTime?
 
-  institution   Institution?          @relation(fields: [institutionId], references: [id])
+  institution    Institution?          @relation(fields: [institutionId], references: [id])
   studentProfile StudentProfile?
-  assignments   ClassroomAssignment[]
-  auditEntries  AuditLog[]            @relation("AuditActor")
-  resolvedAlerts TeacherAlert[]       @relation("AlertResolver")
+  assignments    ClassroomAssignment[]
+  auditEntries   AuditLog[]            @relation("AuditActor")
+  resolvedAlerts TeacherAlert[]        @relation("AlertResolver")
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -154,12 +180,15 @@ model User {
 
 /// Datos del estudiante. Deliberadamente pobre en información personal.
 model StudentProfile {
-  id          String @id @default(cuid())
+  id            String @id @default(cuid())
+  /// Colegio dueño del dato (multi-colegio). Lo pone apps/api/src/shared/db.ts.
+  institutionId String
+
   userId      String @unique
   classroomId String
 
   /// Clave del avatar ilustrado (fauna colombiana). NUNCA una fotografía.
-  avatarKey   String @default("nativia")
+  avatarKey String @default("nativia")
 
   /// Hash del PIN gráfico de 3 imágenes (argon2id). Segundo factor apto para la edad.
   graphicPinHash String?
@@ -170,17 +199,18 @@ model StudentProfile {
   a11ySettings String @default("{}")
 
   /// El acceso está bloqueado hasta que exista un ConsentRecord vigente (US-09).
-  isUnlocked  Boolean @default(false)
+  isUnlocked Boolean @default(false)
 
-  user       User             @relation(fields: [userId], references: [id])
-  classroom  Classroom        @relation(fields: [classroomId], references: [id])
-  consents   ConsentRecord[]
-  attempts   Attempt[]
-  mastery    MasteryScore[]
-  badges     StudentBadge[]
-  budgets    TokenBudget[]
-  alerts     TeacherAlert[]
+  user         User             @relation(fields: [userId], references: [id])
+  classroom    Classroom        @relation(fields: [classroomId], references: [id])
+  consents     ConsentRecord[]
+  attempts     Attempt[]
+  mastery      MasteryScore[]
+  badges       StudentBadge[]
+  budgets      TokenBudget[]
+  alerts       TeacherAlert[]
   interactions LLMInteraction[]
+  institution  Institution      @relation(fields: [institutionId], references: [id])
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -188,6 +218,7 @@ model StudentProfile {
 
   @@index([classroomId])
   @@index([isUnlocked])
+  @@index([institutionId])
   @@map("student_profiles")
 }
 
@@ -195,22 +226,26 @@ model StudentProfile {
 /// Resuelve el caso real de docentes de apoyo, orientación y reemplazos
 /// (crítica 2 de docs/10-teacher-dashboard-spec.md).
 model ClassroomAssignment {
-  id          String @id @default(cuid())
+  id            String @id @default(cuid())
+  /// Colegio dueño del dato (multi-colegio). Lo pone apps/api/src/shared/db.ts.
+  institutionId String
+
   userId      String
   classroomId String
 
   /// "titular" | "apoyo" | "orientacion" | "reemplazo" | "coordinacion"
-  role        String
+  role String
 
   /// Matriz de permisos derivada del rol; se materializa aquí para auditabilidad.
-  canViewTranscripts Boolean @default(false)
+  canViewTranscripts   Boolean @default(false)
   canResolveRiskAlerts Boolean @default(false)
 
   startsAt DateTime  @default(now())
   endsAt   DateTime?
 
-  user      User      @relation(fields: [userId], references: [id])
-  classroom Classroom @relation(fields: [classroomId], references: [id])
+  user        User        @relation(fields: [userId], references: [id])
+  classroom   Classroom   @relation(fields: [classroomId], references: [id])
+  institution Institution @relation(fields: [institutionId], references: [id])
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -218,6 +253,7 @@ model ClassroomAssignment {
 
   @@unique([userId, classroomId, role])
   @@index([classroomId, role])
+  @@index([institutionId])
   @@map("classroom_assignments")
 }
 
@@ -230,33 +266,37 @@ model ClassroomAssignment {
 /// Este modelo soporta el flujo híbrido (certificación institucional +
 /// ratificación/revocación del acudiente) y es parametrizable por institución.
 model ConsentRecord {
-  id               String @id @default(cuid())
+  id            String @id @default(cuid())
+  /// Colegio dueño del dato (multi-colegio). Lo pone apps/api/src/shared/db.ts.
+  institutionId String
+
   studentProfileId String
 
   /// "institucional" | "acudiente_digital" | "hibrido"
-  mechanism        String
+  mechanism String
   /// "pendiente" | "otorgado" | "revocado" | "expirado"
-  status           String @default("pendiente")
+  status    String @default("pendiente")
 
   /// Versión del texto de consentimiento aceptado. Versionado obligatorio:
   /// un cambio de texto invalida los consentimientos anteriores.
-  policyVersion    String
+  policyVersion String
 
   /// Identificación del adulto que autoriza, seudonimizada.
   /// NO se almacena su documento de identidad ni su dirección.
   guardianRef      String?
   guardianRelation String?
 
-  grantedAt  DateTime?
-  revokedAt  DateTime?
-  expiresAt  DateTime?
+  grantedAt DateTime?
+  revokedAt DateTime?
+  expiresAt DateTime?
 
   /// Evidencia del acto, JSON:
   /// { "channel": "correo|papel|portal", "ip": "...", "userAgent": "...",
   ///   "certifiedByUserId": "...", "documentRef": "..." }
-  evidence   String @default("{}")
+  evidence String @default("{}")
 
   studentProfile StudentProfile @relation(fields: [studentProfileId], references: [id])
+  institution    Institution    @relation(fields: [institutionId], references: [id])
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -264,6 +304,7 @@ model ConsentRecord {
 
   @@index([studentProfileId, status])
   @@index([status, expiresAt])
+  @@index([institutionId])
   @@map("consent_records")
 }
 
@@ -275,11 +316,11 @@ model ConsentRecord {
 // referencias y resultados, no la autoría.
 
 model LearningPath {
-  id     String @id @default(cuid())
-  slug   String @unique
-  name   String
+  id    String @id @default(cuid())
+  slug  String @unique
+  name  String
   /// 3 | 4 | 5
-  grade  Int
+  grade Int
 
   activities Activity[]
 
@@ -293,13 +334,13 @@ model LearningPath {
 
 /// Los cuatro ejes: A, B, C, D.
 model Axis {
-  id    String @id @default(cuid())
+  id             String  @id @default(cuid())
   /// "A" | "B" | "C" | "D"
-  code  String @unique
-  name  String
+  code           String  @unique
+  name           String
   /// Nombre visible para el estudiante: "Piensa con la IA"
-  displayName String
-  colorToken  String
+  displayName    String
+  colorToken     String
   /// ¿Puede completarse sin conexión? A, C y D = true; B = false (degrada).
   offlineCapable Boolean @default(true)
 
@@ -317,12 +358,12 @@ model Activity {
   learningPathId String
   axisId         String
 
-  title       String
+  title            String
   /// "matematicas" | "lenguaje" | "ciencias"
-  subject     String
+  subject          String
   /// "tutor_socratico" | "clasificacion" | "dilema_ramificado" | "comparacion"
-  kind        String
-  orderIndex  Int
+  kind             String
+  orderIndex       Int
   estimatedMinutes Int
 
   // --- Trazabilidad pedagógica (requisito transversal del proyecto) ---
@@ -335,14 +376,14 @@ model Activity {
 
   // --- Configuración del tutor (solo kind = tutor_socratico) ---
   /// Clave del system prompt en packages/content/prompts/
-  systemPromptKey String?
+  systemPromptKey    String?
   /// Valores que el tutor NUNCA puede afirmar como resultado.
   /// JSON: ["4", "cuatro", "24/6"] — alimenta la capa 1 del detector de fuga.
-  forbiddenAnswers String @default("[]")
+  forbiddenAnswers   String  @default("[]")
   /// Clave del árbol socrático pregrabado (ADR-005). Obligatorio si el eje es B.
-  fallbackTreeKey  String?
+  fallbackTreeKey    String?
   /// Turnos antes de ofrecer una pista fuerte (andamiaje decreciente por grado).
-  maxTurnsBeforeHint Int @default(6)
+  maxTurnsBeforeHint Int     @default(6)
 
   /// Contenido de los pasos, JSON validado por Zod en CI.
   /// Su forma depende de `kind`; ver packages/content/schemas/.
@@ -350,12 +391,12 @@ model Activity {
 
   /// Todo contenido que ve un menor pasa por revisión editorial humana
   /// (salvaguarda ética 7). Sin revisor, la actividad no se publica.
-  reviewedBy String?
-  reviewedAt DateTime?
-  isPublished Boolean @default(false)
+  reviewedBy  String?
+  reviewedAt  DateTime?
+  isPublished Boolean   @default(false)
 
-  learningPath LearningPath @relation(fields: [learningPathId], references: [id])
-  axis         Axis         @relation(fields: [axisId], references: [id])
+  learningPath LearningPath   @relation(fields: [learningPathId], references: [id])
+  axis         Axis           @relation(fields: [axisId], references: [id])
   attempts     Attempt[]
   mastery      MasteryScore[]
 
@@ -375,41 +416,45 @@ model Activity {
 // =============================================================================
 
 model Attempt {
-  id               String @id @default(cuid())
+  id            String @id @default(cuid())
+  /// Colegio dueño del dato (multi-colegio). Lo pone apps/api/src/shared/db.ts.
+  institutionId String
+
   studentProfileId String
   activityId       String
 
   /// Idempotencia de la cola offline (ADR-007). Generado en el dispositivo.
-  clientAttemptId  String @unique
+  clientAttemptId String @unique
 
   /// "en_curso" | "completado" | "abandonado"
-  status      String   @default("en_curso")
+  status String @default("en_curso")
   /// "online" | "degradado_sin_red" | "degradado_sin_presupuesto" | "mock"
   /// Dimensión de primer nivel del análisis de impacto: online y degradado
   /// son intervenciones distintas (crítica 2 de docs/04-technical-architecture.md).
-  mode        String   @default("online")
+  mode   String @default("online")
 
-  startedAt   DateTime  @default(now())
-  completedAt DateTime?
+  startedAt       DateTime  @default(now())
+  completedAt     DateTime?
   durationSeconds Int?
 
   /// ¿Resolvió sin pistas? Alimenta "lo lograste sin ayuda" vs "con pistas".
-  hintsUsed   Int     @default(0)
-  isCorrect   Boolean?
+  hintsUsed             Int      @default(0)
+  isCorrect             Boolean?
   /// En ejes C y D un acierto sin justificación válida NO cuenta para el
   /// dominio (US-02). Este campo es el que lo controla.
-  hasValidJustification Boolean @default(false)
+  hasValidJustification Boolean  @default(false)
 
   /// North Star Metric (ISVI): ¿el estudiante enunció y registró un método
   /// propio de comprobación ANTES de que el tutor lo sugiriera?
   independentVerification Boolean @default(false)
   verificationNote        String?
 
-  studentProfile StudentProfile @relation(fields: [studentProfileId], references: [id])
-  activity       Activity       @relation(fields: [activityId], references: [id])
+  studentProfile StudentProfile         @relation(fields: [studentProfileId], references: [id])
+  activity       Activity               @relation(fields: [activityId], references: [id])
   events         AttemptEvent[]
   interaction    LLMInteraction?
   metacognition  MetacognitionResponse?
+  institution    Institution            @relation(fields: [institutionId], references: [id])
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -419,13 +464,17 @@ model Attempt {
   @@index([activityId])
   @@index([mode])
   @@index([independentVerification])
+  @@index([institutionId])
   @@map("attempts")
 }
 
 /// Evento granular. En producción replica a ClickHouse; en el prototipo
 /// vive aquí (ADR-002). Se lee siempre a través de la interfaz EventStore.
 model AttemptEvent {
-  id        String @id @default(cuid())
+  id            String @id @default(cuid())
+  /// Colegio dueño del dato (multi-colegio). Lo pone apps/api/src/shared/db.ts.
+  institutionId String
+
   attemptId String
 
   /// Idempotencia de la cola offline (ADR-007). Upsert por esta clave.
@@ -438,19 +487,21 @@ model AttemptEvent {
   stepIndex Int?
 
   /// Carga útil del evento, JSON. Forma según `type`.
-  payload   String @default("{}")
+  payload String @default("{}")
 
   /// Momento en el dispositivo (puede diferir del servidor si estaba offline).
-  occurredAt   DateTime
+  occurredAt DateTime
   /// Momento en que el servidor lo recibió. La diferencia mide el rezago offline.
-  receivedAt   DateTime @default(now())
+  receivedAt DateTime @default(now())
 
-  attempt Attempt @relation(fields: [attemptId], references: [id])
+  attempt     Attempt     @relation(fields: [attemptId], references: [id])
+  institution Institution @relation(fields: [institutionId], references: [id])
 
   createdAt DateTime @default(now())
 
   @@index([attemptId, occurredAt])
   @@index([type, occurredAt])
+  @@index([institutionId])
   @@map("attempt_events")
 }
 
@@ -458,22 +509,27 @@ model AttemptEvent {
 /// Se muestra al docente TEXTUAL, sin resumir ni analizar automáticamente
 /// (docs/10-teacher-dashboard-spec.md §6.2). NUNCA se califica.
 model MetacognitionResponse {
-  id        String @id @default(cuid())
+  id            String @id @default(cuid())
+  /// Colegio dueño del dato (multi-colegio). Lo pone apps/api/src/shared/db.ts.
+  institutionId String
+
   attemptId String @unique
 
   /// "texto" | "voz" | "opcion_andamiaje"
-  inputMode String @default("texto")
-  text      String
+  inputMode    String  @default("texto")
+  text         String
   /// Frases de andamiaje seleccionadas, separadas por "|".
   scaffoldTags String?
-  audioRef  String?
+  audioRef     String?
 
-  attempt Attempt @relation(fields: [attemptId], references: [id])
+  attempt     Attempt     @relation(fields: [attemptId], references: [id])
+  institution Institution @relation(fields: [institutionId], references: [id])
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
+  @@index([institutionId])
   @@map("metacognition_responses")
 }
 
@@ -484,15 +540,18 @@ model MetacognitionResponse {
 /// Un diálogo completo entre un estudiante y el tutor, dentro de un intento.
 /// Es el registro que hace auditable el eje B (ADR-004).
 model LLMInteraction {
-  id               String @id @default(cuid())
+  id            String @id @default(cuid())
+  /// Colegio dueño del dato (multi-colegio). Lo pone apps/api/src/shared/db.ts.
+  institutionId String
+
   attemptId        String @unique
   studentProfileId String
 
   /// Id exacto del modelo, p. ej. "claude-sonnet-5". Registrado para poder
   /// correlacionar un cambio de modelo con un cambio de comportamiento (ADR-006).
-  model        String
-  temperature  Float  @default(0.4)
-  systemPromptKey String
+  model            String
+  temperature      Float  @default(0.4)
+  systemPromptKey  String
   /// Hash del system prompt efectivamente enviado. Permite verificar que una
   /// conversación histórica se produjo con el prompt que se cree.
   systemPromptHash String
@@ -502,13 +561,13 @@ model LLMInteraction {
   turnCount    Int @default(0)
 
   // --- Banderas de seguridad y pedagogía, agregadas del diálogo ---
-  flaggedModeration   Boolean @default(false)
-  flaggedRisk         Boolean @default(false)
-  flaggedEvasion      Boolean @default(false)
-  evasionAttempts     Int     @default(0)
+  flaggedModeration        Boolean @default(false)
+  flaggedRisk              Boolean @default(false)
+  flaggedEvasion           Boolean @default(false)
+  evasionAttempts          Int     @default(0)
   /// Fugas de respuesta detectadas por el detector de 3 capas.
   /// > 0 exige revisión: el sistema las bloqueó, pero indica prompt débil.
-  answerLeaksDetected Int     @default(0)
+  answerLeaksDetected      Int     @default(0)
   /// Clasificación de aceptación acrítica (docs/10 §4.1). NULL = sin clasificar.
   acriticalAcceptanceRatio Float?
 
@@ -518,6 +577,7 @@ model LLMInteraction {
   attempt        Attempt        @relation(fields: [attemptId], references: [id])
   studentProfile StudentProfile @relation(fields: [studentProfileId], references: [id])
   turns          LLMTurn[]
+  institution    Institution    @relation(fields: [institutionId], references: [id])
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -526,6 +586,7 @@ model LLMInteraction {
   @@index([studentProfileId, startedAt])
   @@index([flaggedRisk])
   @@index([answerLeaksDetected])
+  @@index([institutionId])
   @@map("llm_interactions")
 }
 
@@ -533,6 +594,9 @@ model LLMInteraction {
 /// (docs/10-teacher-dashboard-spec.md §7).
 model LLMTurn {
   id            String @id @default(cuid())
+  /// Colegio dueño del dato (multi-colegio). Lo pone apps/api/src/shared/db.ts.
+  institutionId String
+
   interactionId String
   turnIndex     Int
 
@@ -541,47 +605,54 @@ model LLMTurn {
   content String
 
   /// "normal" | "evasion" | "fuera_de_alcance" | "riesgo"
-  intentClass String?
+  intentClass      String?
   /// Etiquetas de moderación, separadas por ",".
-  moderationTags String?
+  moderationTags   String?
   /// El turno del tutor fue rechazado por fuga y regenerado.
-  wasRegenerated Boolean @default(false)
+  wasRegenerated   Boolean @default(false)
   /// Turno servido por el árbol pregrabado, no por el modelo.
   fromFallbackTree Boolean @default(false)
 
-  latencyMs   Int?
-  occurredAt  DateTime @default(now())
+  latencyMs  Int?
+  occurredAt DateTime @default(now())
 
   interaction LLMInteraction @relation(fields: [interactionId], references: [id])
+  institution Institution    @relation(fields: [institutionId], references: [id])
 
   createdAt DateTime @default(now())
 
   @@unique([interactionId, turnIndex])
   @@index([intentClass])
+  @@index([institutionId])
   @@map("llm_turns")
 }
 
 /// Techo duro de costo por estudiante y período (ADR-006, requisito P-04).
 /// Al agotarse, el tutor degrada al árbol pregrabado sin mencionar costos al niño.
 model TokenBudget {
-  id               String @id @default(cuid())
+  id            String @id @default(cuid())
+  /// Colegio dueño del dato (multi-colegio). Lo pone apps/api/src/shared/db.ts.
+  institutionId String
+
   studentProfileId String
 
   /// "2026-09" — período mensual
-  period       String
-  inputTokensUsed  Int @default(0)
-  outputTokensUsed Int @default(0)
+  period           String
+  inputTokensUsed  Int     @default(0)
+  outputTokensUsed Int     @default(0)
   /// Techo del período, en tokens de salida equivalentes.
-  limitTokens  Int @default(60000)
-  isExhausted  Boolean @default(false)
+  limitTokens      Int     @default(60000)
+  isExhausted      Boolean @default(false)
 
   studentProfile StudentProfile @relation(fields: [studentProfileId], references: [id])
+  institution    Institution    @relation(fields: [institutionId], references: [id])
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([studentProfileId, period])
   @@index([isExhausted])
+  @@index([institutionId])
   @@map("token_budgets")
 }
 
@@ -592,7 +663,10 @@ model TokenBudget {
 /// Dominio por estudiante × subcompetencia, estimado con Bayesian Knowledge
 /// Tracing (docs/10-teacher-dashboard-spec.md §4.2).
 model MasteryScore {
-  id               String @id @default(cuid())
+  id            String @id @default(cuid())
+  /// Colegio dueño del dato (multi-colegio). Lo pone apps/api/src/shared/db.ts.
+  institutionId String
+
   studentProfileId String
   activityId       String?
 
@@ -602,10 +676,10 @@ model MasteryScore {
   axisCode       String
 
   /// p(dominio) según BKT. 0..1
-  probability Float @default(0.25)
+  probability   Float  @default(0.25)
   /// Oportunidades de práctica. < 2 ⇒ el heatmap muestra "sin datos",
   /// nunca "necesita apoyo" (regla no negociable de docs/10 §4.2).
-  opportunities Int @default(0)
+  opportunities Int    @default(0)
   /// "sin_datos" | "necesita_apoyo" | "va_en_camino" | "lo_maneja_bien"
   level         String @default("sin_datos")
 
@@ -618,6 +692,7 @@ model MasteryScore {
 
   studentProfile StudentProfile @relation(fields: [studentProfileId], references: [id])
   activity       Activity?      @relation(fields: [activityId], references: [id])
+  institution    Institution    @relation(fields: [institutionId], references: [id])
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -625,14 +700,15 @@ model MasteryScore {
 
   @@unique([studentProfileId, pisaCompetence])
   @@index([axisCode, level])
+  @@index([institutionId])
   @@map("mastery_scores")
 }
 
 /// Los logros premian conductas epistémicas ("Preguntona", "Duda bien"),
 /// no volumen de ejercicios (docs/02 pantalla 9).
 model Badge {
-  id          String @id @default(cuid())
-  slug        String @unique
+  id          String  @id @default(cuid())
+  slug        String  @unique
   name        String
   description String
   iconKey     String
@@ -640,7 +716,7 @@ model Badge {
 
   /// Regla de obtención, JSON:
   /// { "metric":"independent_verification_count", "op":">=", "value":3 }
-  criteria    String @default("{}")
+  criteria String @default("{}")
 
   students StudentBadge[]
 
@@ -651,17 +727,22 @@ model Badge {
 }
 
 model StudentBadge {
-  id               String @id @default(cuid())
+  id            String @id @default(cuid())
+  /// Colegio dueño del dato (multi-colegio). Lo pone apps/api/src/shared/db.ts.
+  institutionId String
+
   studentProfileId String
   badgeId          String
   earnedAt         DateTime @default(now())
 
   studentProfile StudentProfile @relation(fields: [studentProfileId], references: [id])
   badge          Badge          @relation(fields: [badgeId], references: [id])
+  institution    Institution    @relation(fields: [institutionId], references: [id])
 
   createdAt DateTime @default(now())
 
   @@unique([studentProfileId, badgeId])
+  @@index([institutionId])
   @@map("student_badges")
 }
 
@@ -670,8 +751,11 @@ model StudentBadge {
 // =============================================================================
 
 model TeacherAlert {
-  id          String @id @default(cuid())
-  classroomId String
+  id            String @id @default(cuid())
+  /// Colegio dueño del dato (multi-colegio). Lo pone apps/api/src/shared/db.ts.
+  institutionId String
+
+  classroomId      String
   /// NULL en alertas grupales (A-GRUPO) y de sistema (A-DEGRAD).
   studentProfileId String?
 
@@ -683,7 +767,7 @@ model TeacherAlert {
 
   /// Texto en lenguaje llano, sin jerga. Enuncia conducta observable,
   /// nunca un atributo del niño (docs/10 §2.1).
-  message  String
+  message         String
   /// Acción concreta ofrecida. Sin acción, la alerta NO se emite.
   /// JSON: { "type":"plan_de_clase", "ref":"explicalo-sin-numeros" }
   suggestedAction String @default("{}")
@@ -693,15 +777,16 @@ model TeacherAlert {
   isContentHidden Boolean @default(false)
 
   /// "abierta" | "atendida" | "no_aplica" | "escalada"
-  status     String @default("abierta")
+  status         String    @default("abierta")
   /// "no_aplica" alimenta el ajuste de umbrales por docente (docs/10 §5.2).
-  resolvedById String?
-  resolvedAt   DateTime?
+  resolvedById   String?
+  resolvedAt     DateTime?
   resolutionNote String?
 
   classroom      Classroom       @relation(fields: [classroomId], references: [id])
   studentProfile StudentProfile? @relation(fields: [studentProfileId], references: [id])
   resolvedBy     User?           @relation("AlertResolver", fields: [resolvedById], references: [id])
+  institution    Institution     @relation(fields: [institutionId], references: [id])
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -710,6 +795,7 @@ model TeacherAlert {
   @@index([classroomId, status, severity])
   @@index([code, createdAt])
   @@index([studentProfileId, status])
+  @@index([institutionId])
   @@map("teacher_alerts")
 }
 
@@ -717,34 +803,39 @@ model TeacherAlert {
 /// en vivo: con 32 estudiantes funcionaría, con 300.000 no
 /// (docs/10-teacher-dashboard-spec.md §9).
 model ClassroomSummary {
-  id          String @id @default(cuid())
+  id            String @id @default(cuid())
+  /// Colegio dueño del dato (multi-colegio). Lo pone apps/api/src/shared/db.ts.
+  institutionId String
+
   classroomId String
 
   /// Ventana del cálculo: "7d" | "30d"
-  window      String
-  computedAt  DateTime @default(now())
+  window     String
+  computedAt DateTime @default(now())
 
-  activeStudents      Int   @default(0)
-  attemptsCompleted   Int   @default(0)
+  activeStudents    Int    @default(0)
+  attemptsCompleted Int    @default(0)
   /// North Star: interacciones socráticas con verificación independiente.
-  isviRatio           Float @default(0)
+  isviRatio         Float  @default(0)
   /// Métrica antagónica: tasa de delegación acrítica.
-  acriticalRatio      Float?
-  degradedTurnRatio   Float @default(0)
+  acriticalRatio    Float?
+  degradedTurnRatio Float  @default(0)
 
   /// Ranking de triaje precalculado, JSON:
   /// [{ "studentProfileId":"...", "score":72, "reason":"..." }]
-  triageTop3          String @default("[]")
+  triageTop3    String @default("[]")
   /// Dominio agregado por eje, JSON: { "A":0.62, "B":0.31, "C":0.70, "D":0.28 }
-  masteryByAxis       String @default("{}")
+  masteryByAxis String @default("{}")
 
-  classroom Classroom @relation(fields: [classroomId], references: [id])
+  classroom   Classroom   @relation(fields: [classroomId], references: [id])
+  institution Institution @relation(fields: [institutionId], references: [id])
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([classroomId, window])
   @@index([computedAt])
+  @@index([institutionId])
   @@map("classroom_summaries")
 }
 
@@ -753,15 +844,21 @@ model ClassroomSummary {
 // =============================================================================
 
 /// Append-only. Sin updatedAt, sin deletedAt, sin borrado.
-/// En PostgreSQL se refuerza con un trigger que impide UPDATE y DELETE;
-/// en SQLite la garantía es de capa de aplicación (limitación documentada).
+/// Hoy la garantía es de capa de aplicación; falta el trigger de PostgreSQL que
+/// impida UPDATE y DELETE (nota 4 de migración, al final de este archivo).
 model AuditLog {
-  id      String @id @default(cuid())
+  id            String  @id @default(cuid())
+  /// Colegio afectado. NULL si la acción no es sobre un colegio.
+  institutionId String?
+
   actorId String?
 
   /// "consulta_transcripcion" | "resolucion_alerta" | "cambio_consentimiento" |
   /// "exportacion_datos" | "borrado_derecho_olvido" | "cambio_rol" |
-  /// "ingreso_anomalo" | "cambio_modelo_llm"
+  /// "ingreso_anomalo" | "cambio_modelo_llm" |
+  /// Panel del equipo: "creacion_colegio" | "creacion_sede" | "creacion_curso" |
+  /// "cambio_codigo_ingreso" | "creacion_cuenta" | "asignacion_curso" |
+  /// "activacion_cuenta" | "desactivacion_cuenta" | "restablecimiento_contrasena"
   action     String
   /// Tipo y id del objeto afectado.
   targetType String
@@ -769,24 +866,26 @@ model AuditLog {
 
   /// Motivo declarado por el actor cuando la acción lo exige
   /// (p. ej. acceso individual de coordinación).
-  reason     String?
+  reason  String?
   /// Contexto, JSON: { "ip":"...", "userAgent":"...", "classroomId":"..." }
-  context    String @default("{}")
+  context String  @default("{}")
 
   occurredAt DateTime @default(now())
 
-  actor User? @relation("AuditActor", fields: [actorId], references: [id])
+  actor       User?        @relation("AuditActor", fields: [actorId], references: [id])
+  institution Institution? @relation(fields: [institutionId], references: [id])
 
   @@index([actorId, occurredAt])
   @@index([targetType, targetId])
   @@index([action, occurredAt])
+  @@index([institutionId])
   @@map("audit_log")
 }
 
 // =============================================================================
 // NOTAS DE MIGRACIÓN A POSTGRESQL
 // =============================================================================
-// 1. datasource.provider = "postgresql"
+// 1. ✅ datasource.provider = "postgresql" (2026-10-25, Neon).
 // 2. Convertir a `enum` nativo: User.role, Attempt.status, Attempt.mode,
 //    TeacherAlert.code, TeacherAlert.severity, MasteryScore.level, LLMTurn.role.
 //    Los valores admitidos ya están documentados en los comentarios de cada campo.
