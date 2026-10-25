@@ -7,7 +7,7 @@ propio, reemplazando su `index.ts` por un cliente HTTP.
 ```
 src/
   server.ts       arma la app y registra los módulos; no tiene lógica
-  shared/         config, autenticación, respuestas HTTP, eventos internos
+  shared/         config, autenticación, colegio activo, base de datos, respuestas HTTP, eventos
   modules/
     <módulo>/
       index.ts    lo único que otros módulos pueden importar
@@ -36,15 +36,24 @@ src/
 2. **`shared/` no conoce a ningún módulo.**
 3. **Solo `contenido` importa `@nativia/content`** dentro del API.
 4. **Sin ciclos** entre módulos: dos módulos que se importan entre sí ya no se pueden separar.
-5. **Cada tabla tiene un solo módulo dueño**, y solo su `repo.ts` la consulta. Los demás le piden
+5. **La base se usa solo a través de `shared/db.ts`**, nunca importando `@nativia/db`:
+   - `db` filtra por colegio. Toda consulta a una tabla con datos de un colegio lleva el colegio
+     activo de la petición, que fijan las guardas de `shared/auth.ts` a partir del token. Sin
+     colegio activo, la consulta falla antes de llegar a la base.
+   - `dbGlobal` no filtra. Solo para lo que cruza colegios por naturaleza: el ingreso, el panel del
+     equipo de plataforma (con auditoría) y la verificación de salud.
+   - Al crear, `institutionId: activeInstitutionId()` deja explícito de quién es el dato.
+6. **Cada tabla tiene un solo módulo dueño**, y solo su `repo.ts` la consulta. Los demás le piden
    los datos por su `index.ts` o escuchan sus eventos (`shared/events.ts`).
 
-Las reglas 1–4 las verifica `pnpm lint:modules` en CI y rompen el build. La 5 se reporta como
-advertencia mientras se paga la deuda.
+Las reglas 1–5 las verifica `pnpm lint:modules` en CI y rompen el build. La 6 se reporta como
+advertencia mientras se paga la deuda. Una prueba (`tests/multi-colegio.test.ts`) falla si una tabla
+nueva con `institutionId` no queda dentro del filtro.
 
 ## Deuda conocida
 
-Hoy las rutas consultan Prisma directamente, y algunas leen tablas de otros módulos:
+Hoy las rutas consultan la base directamente (con `db`, sin `repo.ts`), y algunas leen tablas de otros
+módulos:
 
 | Quién | Lee tablas de | Cómo se resuelve |
 |---|---|---|

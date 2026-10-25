@@ -1,14 +1,13 @@
 # =============================================================================
-# Imagen de la demo de NativIA para Cloud Run.
+# Imagen de NativIA para Cloud Run.
 #
-# Compila el front, crea una base SQLite limpia con los datos de demostración y
-# arranca la API, que en producción sirve también el front (una sola URL).
+# Compila el front y arranca la API, que en producción sirve también el front
+# (una sola URL). La base de datos vive en Neon: la imagen no la crea ni la
+# migra. DATABASE_URL llega en tiempo de ejecución desde Secret Manager.
 #
-# Cloud Run no conserva lo que se escribe en disco: cada instancia nueva arranca
-# con esta misma base limpia. Para una demo eso es bueno; para datos reales no
-# sirve (ver docs/04-technical-architecture.md, objetivo PostgreSQL).
-# Desplegar SIEMPRE con --max-instances 1: dos instancias tendrían dos bases
-# distintas y los datos cambiarían según a cuál llegue cada petición.
+# Migraciones y datos de demo se aplican aparte, desde un PC del equipo:
+#   pnpm db:deploy:production    → migraciones en la rama production de Neon
+#   pnpm demo:reset:production   → deja la demo limpia
 # =============================================================================
 
 FROM node:22-bookworm-slim
@@ -26,15 +25,12 @@ WORKDIR /app
 COPY . .
 RUN pnpm install --frozen-lockfile
 
-# Base de demostración, creada desde el esquema y el seed en cada build.
-ENV DATABASE_URL="file:./nativia.db"
-WORKDIR /app/packages/db
-RUN rm -f nativia.db \
- && pnpm exec prisma db push --schema=./schema.prisma --skip-generate \
- && pnpm exec prisma generate --schema=./schema.prisma \
- && pnpm exec tsx src/seed.ts
+# El cliente de Prisma se genera sin conectarse a la base: la URL de aquí es
+# de relleno y no queda en la imagen.
+RUN cd packages/db \
+ && DATABASE_URL="postgresql://build:build@localhost:5432/build" \
+    pnpm exec prisma generate --schema=./schema.prisma
 
-WORKDIR /app
 RUN pnpm --filter @nativia/web build
 
 ENV NODE_ENV=production

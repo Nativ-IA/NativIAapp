@@ -14,6 +14,11 @@ const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   JWT_SECRET: z.string().min(16),
 
+  // Rama de Neon con pooler. Si todavía dice file:..., es el .env de SQLite.
+  DATABASE_URL: z
+    .string({ required_error: 'Falta DATABASE_URL (la cadena de Neon con pooler)' })
+    .regex(/^postgres(ql)?:\/\//, 'DATABASE_URL debe ser la cadena de Neon: postgresql://...'),
+
   MOCK_LLM: z
     .string()
     .default('true')
@@ -41,6 +46,11 @@ if (!parsed.success) {
 }
 
 export const config = parsed.data;
+
+// El esquema declara directUrl = env("DATABASE_URL_UNPOOLED"), que solo usan
+// las migraciones. En Cloud Run no hace falta configurarla: se cae a la URL con
+// pooler para que el cliente de Prisma no la eche de menos.
+process.env.DATABASE_URL_UNPOOLED ??= config.DATABASE_URL;
 
 /** Modo de operación efectivo del tutor. Sin API key no se intenta la llamada:
  *  arrancar y fallar en el primer turno frente a un niño sería peor que

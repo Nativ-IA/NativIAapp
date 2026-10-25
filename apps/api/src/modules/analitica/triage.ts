@@ -3,7 +3,7 @@
 // Especificación en docs/10-teacher-dashboard-spec.md §2.1.
 // =============================================================================
 
-import { prisma } from '@nativia/db';
+import { db } from '../../shared/db.js';
 
 export interface TriageEntry {
   studentProfileId: string;
@@ -30,7 +30,7 @@ const WEIGHTS = {
 const DELEGATION_READY = false;
 
 export async function computeTriage(classroomId: string): Promise<TriageEntry[]> {
-  const students = await prisma.studentProfile.findMany({
+  const students = await db.studentProfile.findMany({
     where: { classroomId, deletedAt: null, isUnlocked: true },
     include: { user: true },
   });
@@ -39,7 +39,7 @@ export async function computeTriage(classroomId: string): Promise<TriageEntry[]>
   const entries: TriageEntry[] = [];
 
   for (const s of students) {
-    const attempts = await prisma.attempt.findMany({
+    const attempts = await db.attempt.findMany({
       where: { studentProfileId: s.id, deletedAt: null },
       orderBy: { startedAt: 'desc' },
       take: 20,
@@ -58,7 +58,7 @@ export async function computeTriage(classroomId: string): Promise<TriageEntry[]>
     const frustracion = recent.length ? Math.min(100, (abandoned / recent.length) * 100) : 0;
 
     // --- Estancamiento: fallos consecutivos en la misma competencia ---
-    const failing = await prisma.masteryScore.count({
+    const failing = await db.masteryScore.count({
       where: { studentProfileId: s.id, level: 'necesita_apoyo', opportunities: { gte: 3 } },
     });
     const estancamiento = Math.min(100, failing * 34);
@@ -92,7 +92,7 @@ export async function computeTriage(classroomId: string): Promise<TriageEntry[]>
   }
 
   // Cualquier alerta de riesgo abierta fuerza la primera posición.
-  const risky = await prisma.teacherAlert.findMany({
+  const risky = await db.teacherAlert.findMany({
     where: { classroomId, code: 'A-RIESGO', status: 'abierta' },
     select: { studentProfileId: true },
   });

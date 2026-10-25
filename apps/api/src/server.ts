@@ -11,9 +11,10 @@ import fastifyStatic from '@fastify/static';
 import { existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { prisma } from '@nativia/db';
 import { config, llmMode } from './shared/config.js';
 import { registerAuth } from './shared/auth.js';
+import { registerTenantContext } from './shared/tenant.js';
+import { dbGlobal } from './shared/db.js';
 import { identidadRoutes } from './modules/identidad/index.js';
 import { aprendizajeRoutes } from './modules/aprendizaje/index.js';
 import { tutorRoutes } from './modules/tutor/index.js';
@@ -38,13 +39,15 @@ export async function buildServer() {
 
   // En producción front y API comparten origen, así que no hace falta CORS.
   await app.register(cors, { origin: !isProduction, credentials: true });
+  // Primero el contexto por petición: las guardas de auth escriben en él.
+  await registerTenantContext(app);
   await registerAuth(app);
   await app.register(rateLimit, { global: false });
 
   app.get('/v1/health', async () => {
     let database: 'ok' | 'error' = 'ok';
     try {
-      await prisma.$queryRaw`SELECT 1`;
+      await dbGlobal.$queryRaw`SELECT 1`;
     } catch {
       database = 'error';
     }

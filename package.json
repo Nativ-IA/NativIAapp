@@ -12,10 +12,12 @@
     "build": "pnpm --filter @nativia/api build && pnpm --filter @nativia/web build",
     "test": "pnpm --filter @nativia/api test",
     "lint:modules": "pnpm --filter @nativia/api lint:modules",
-    "db:push": "pnpm --filter @nativia/db push",
+    "db:migrate": "pnpm --filter @nativia/db migrate",
     "db:seed": "pnpm --filter @nativia/db seed",
     "db:reset": "pnpm --filter @nativia/db reset",
-    "setup": "pnpm install && pnpm db:push && pnpm db:seed",
+    "db:deploy:production": "pnpm --filter @nativia/db run deploy:production",
+    "demo:reset:production": "pnpm --filter @nativia/db run seed:production",
+    "setup": "pnpm install && pnpm db:migrate && pnpm db:seed",
     "check:palette": "python packages/ui/scripts/validate_palette.py \"#2F62C4,#0D9668,#AC7100,#A03390\" --mode light --surface \"#F5F8FA\" --pairs all && python packages/ui/scripts/validate_palette.py \"#8FA9DE,#4A72C6,#1D428E\" --mode light --surface \"#F5F8FA\" --ordinal"
   },
   "devDependencies": {

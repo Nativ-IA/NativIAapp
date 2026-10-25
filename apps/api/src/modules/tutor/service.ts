@@ -8,7 +8,7 @@
 //   5 prompt → 6 llamada → 7 detector de fuga → 8 persistencia
 // =============================================================================
 
-import { prisma } from '@nativia/db';
+import { db, activeInstitutionId } from '../../shared/db.js';
 import {
   buildSystemPrompt,
   findActivity,
@@ -55,7 +55,7 @@ export async function handleTurn(args: {
   const started = Date.now();
 
   // ── 1 · Validación ─────────────────────────────────────────────────────────
-  const attempt = await prisma.attempt.findUniqueOrThrow({
+  const attempt = await db.attempt.findUniqueOrThrow({
     where: { id: args.attemptId },
     include: { activity: true, studentProfile: { include: { classroom: true } } },
   });
@@ -105,7 +105,7 @@ export async function handleTurn(args: {
 
   if (mod.blockAndContain) {
     await createRiskAlert(attempt.studentProfile.classroomId, args.studentProfileId);
-    await prisma.lLMInteraction.update({
+    await db.lLMInteraction.update({
       where: { id: interaction.id },
       data: { flaggedRisk: true, flaggedModeration: true },
     });
@@ -124,7 +124,7 @@ export async function handleTurn(args: {
   }
 
   if (mod.tags.some((t) => t.startsWith('pii:'))) {
-    await prisma.lLMInteraction.update({
+    await db.lLMInteraction.update({
       where: { id: interaction.id },
       data: { flaggedModeration: true },
     });
@@ -158,7 +158,7 @@ export async function handleTurn(args: {
 
   if (intent === 'riesgo') {
     await createRiskAlert(attempt.studentProfile.classroomId, args.studentProfileId);
-    await prisma.lLMInteraction.update({
+    await db.lLMInteraction.update({
       where: { id: interaction.id },
       data: { flaggedRisk: true },
     });
@@ -176,7 +176,7 @@ export async function handleTurn(args: {
 
   const isEvasion = intent === 'evasion';
   if (isEvasion) {
-    await prisma.lLMInteraction.update({
+    await db.lLMInteraction.update({
       where: { id: interaction.id },
       data: { flaggedEvasion: true, evasionAttempts: { increment: 1 } },
     });
@@ -189,7 +189,7 @@ export async function handleTurn(args: {
     forbiddenAnswers: content.forbiddenAnswers ?? [],
   });
 
-  const history = await prisma.lLMTurn.findMany({
+  const history = await db.lLMTurn.findMany({
     where: { interactionId: interaction.id },
     orderBy: { turnIndex: 'asc' },
   });
@@ -244,7 +244,7 @@ export async function handleTurn(args: {
   }
 
   if (leaks > 0) {
-    await prisma.lLMInteraction.update({
+    await db.lLMInteraction.update({
       where: { id: interaction.id },
       data: { answerLeaksDetected: { increment: leaks } },
     });
@@ -281,14 +281,14 @@ export async function handleTurn(args: {
   const badVocab = checkOutputVocabulary(reply);
   if (badVocab.length > 0) {
     // No bloquea, pero queda registrado: es una señal de prompt débil.
-    await prisma.lLMInteraction.update({
+    await db.lLMInteraction.update({
       where: { id: interaction.id },
       data: { flaggedModeration: true },
     });
   }
 
   // ── 8 · Persistencia ───────────────────────────────────────────────────────
-  await prisma.lLMInteraction.update({
+  await db.lLMInteraction.update({
     where: { id: interaction.id },
     data: {
       model,
@@ -356,7 +356,7 @@ async function serveFromTree(args: {
   reason: string;
   attemptId: string;
 }): Promise<TurnResult> {
-  const lastTutorTurn = await prisma.lLMTurn.findFirst({
+  const lastTutorTurn = await db.lLMTurn.findFirst({
     where: { interactionId: args.interactionId, role: 'tutor' },
     orderBy: { turnIndex: 'desc' },
   });
@@ -376,7 +376,7 @@ async function serveFromTree(args: {
 
   const node = args.tree.nodes[nextId] ?? args.tree.nodes[args.tree.rootId];
 
-  await prisma.attempt.update({
+  await db.attempt.update({
     where: { id: args.attemptId },
     data: { mode: args.reason === 'mock' ? 'mock' : args.reason },
   });
@@ -415,8 +415,9 @@ async function finish(args: {
 }): Promise<TurnResult> {
   const latencyMs = Date.now() - args.startedAt;
 
-  await prisma.lLMTurn.create({
+  await db.lLMTurn.create({
     data: {
+      institutionId: activeInstitutionId(),
       interactionId: args.interactionId,
       turnIndex: args.turnIndex,
       role: 'estudiante',
@@ -426,8 +427,9 @@ async function finish(args: {
     },
   });
 
-  await prisma.lLMTurn.create({
+  await db.lLMTurn.create({
     data: {
+      institutionId: activeInstitutionId(),
       interactionId: args.interactionId,
       turnIndex: args.turnIndex + 1,
       role: 'tutor',
@@ -439,7 +441,7 @@ async function finish(args: {
     },
   });
 
-  await prisma.lLMInteraction.update({
+  await db.lLMInteraction.update({
     where: { id: args.interactionId },
     data: { turnCount: args.turnIndex + 2 },
   });
@@ -462,7 +464,7 @@ async function getOrCreateInteraction(
   studentProfileId: string,
   promptKey: string,
 ) {
-  const existing = await prisma.lLMInteraction.findUnique({ where: { attemptId } });
+  const existing = await db.lLMInteraction.findUnique({ where: { attemptId } });
   if (existing) return existing;
 
   const content = findActivity(promptKey)!;
@@ -472,8 +474,9 @@ async function getOrCreateInteraction(
     forbiddenAnswers: content.forbiddenAnswers ?? [],
   });
 
-  return prisma.lLMInteraction.create({
+  return db.lLMInteraction.create({
     data: {
+      institutionId: activeInstitutionId(),
       attemptId,
       studentProfileId,
       model: llmMode === 'live' ? config.TUTOR_MODEL : 'fallback-tree',
@@ -488,10 +491,11 @@ async function getOrCreateInteraction(
 
 async function getBudget(studentProfileId: string) {
   const period = new Date().toISOString().slice(0, 7);
-  return prisma.tokenBudget.upsert({
+  return db.tokenBudget.upsert({
     where: { studentProfileId_period: { studentProfileId, period } },
     update: {},
     create: {
+      institutionId: activeInstitutionId(),
       studentProfileId,
       period,
       limitTokens: config.STUDENT_MONTHLY_TOKEN_LIMIT,
@@ -501,12 +505,12 @@ async function getBudget(studentProfileId: string) {
 
 async function consumeBudget(studentProfileId: string, outputTokens: number) {
   const period = new Date().toISOString().slice(0, 7);
-  const b = await prisma.tokenBudget.update({
+  const b = await db.tokenBudget.update({
     where: { studentProfileId_period: { studentProfileId, period } },
     data: { outputTokensUsed: { increment: outputTokens } },
   });
   if (b.outputTokensUsed >= b.limitTokens && !b.isExhausted) {
-    await prisma.tokenBudget.update({
+    await db.tokenBudget.update({
       where: { id: b.id },
       data: { isExhausted: true },
     });
@@ -514,7 +518,7 @@ async function consumeBudget(studentProfileId: string, outputTokens: number) {
 }
 
 async function evasionCount(interactionId: string): Promise<number> {
-  const i = await prisma.lLMInteraction.findUniqueOrThrow({
+  const i = await db.lLMInteraction.findUniqueOrThrow({
     where: { id: interactionId },
   });
   return i.evasionAttempts;
@@ -523,8 +527,9 @@ async function evasionCount(interactionId: string): Promise<number> {
 /** Alerta 🔴. El contenido queda oculto en el listado: la pantalla del docente
  *  puede estar proyectada en el salón (docs/02, pantalla 16). */
 async function createRiskAlert(classroomId: string, studentProfileId: string) {
-  await prisma.teacherAlert.create({
+  await db.teacherAlert.create({
     data: {
+      institutionId: activeInstitutionId(),
       classroomId,
       studentProfileId,
       code: 'A-RIESGO',

@@ -38,7 +38,9 @@ let app: FastifyInstance;
 
 beforeAll(async () => {
   process.env.JWT_SECRET ??= 'secreto-de-prueba-0123456789';
-  process.env.DATABASE_URL ??= 'file:./nativia.db';
+  // Solo arma el servidor; nunca se conecta. Valor fijo para no depender del
+  // .env de quien corre las pruebas ni del de CI.
+  process.env.DATABASE_URL = 'postgresql://prueba:prueba@localhost:5432/prueba';
   const { buildServer } = await import('../src/server.js');
   app = await buildServer();
   await app.ready();
