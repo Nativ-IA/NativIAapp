@@ -1,4 +1,7 @@
-const BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3000/v1';
+// En producción la misma API sirve el front, así que basta la ruta relativa.
+const BASE =
+  import.meta.env.VITE_API_URL ??
+  (import.meta.env.DEV ? 'http://localhost:3000/v1' : '/v1');
 
 export class ApiError extends Error {
   constructor(

@@ -1,0 +1,4 @@
+node_modules
+.env
+apps/api/dist/
+__pycache__/
