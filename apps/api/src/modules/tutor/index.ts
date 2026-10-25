@@ -4,3 +4,6 @@
 // proveedor externo, costo por uso, a futuro un modelo propio en GPU).
 // Dueño de: llm_interactions, llm_turns, token_budgets.
 export { tutorRoutes } from './routes.js';
+
+// Panel de administración: consumo del mes por colegio.
+export { consumoDelMesPorColegio, type ConsumoColegio } from './admin.js';

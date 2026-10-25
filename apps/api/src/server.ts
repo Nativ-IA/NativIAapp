@@ -44,6 +44,19 @@ export async function buildServer() {
   await registerAuth(app);
   await app.register(rateLimit, { global: false });
 
+  // Datos de entrada inválidos (zod): 400 con un detalle legible, no un 500.
+  app.setErrorHandler((error, _req, reply) => {
+    if (error instanceof Error && error.name === 'ZodError') {
+      const issue = (error as any).issues?.[0];
+      return reply.code(400).type('application/problem+json').send({
+        title: 'Datos inválidos',
+        status: 400,
+        detail: issue ? `${issue.path?.join('.') || 'dato'}: ${issue.message}` : undefined,
+      });
+    }
+    return reply.send(error);
+  });
+
   app.get('/v1/health', async () => {
     let database: 'ok' | 'error' = 'ok';
     try {
@@ -67,7 +80,7 @@ export async function buildServer() {
     await v1.register(tutorRoutes);
     await v1.register(analiticaRoutes);
     await v1.register(privacidadRoutes);
-    await v1.register(plataformaRoutes); // reservado: panel del equipo
+    await v1.register(plataformaRoutes); // panel del equipo (/v1/admin)
     await v1.register(natiRoutes); // reservado: asistente Nati
   }, { prefix: '/v1' });
 

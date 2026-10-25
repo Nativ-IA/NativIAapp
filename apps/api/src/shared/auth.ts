@@ -16,6 +16,7 @@ declare module 'fastify' {
   interface FastifyInstance {
     requireStudent: (req: any, reply: any) => Promise<void>;
     requireStaff: (req: any, reply: any) => Promise<void>;
+    requireAdmin: (req: any, reply: any) => Promise<void>;
   }
 }
 
@@ -88,5 +89,18 @@ export async function registerAuth(app: FastifyInstance) {
         : reply.code(401).send({ title: 'Sesión expirada', status: 401 });
     }
     setActiveInstitution(req.user.institutionId);
+  });
+
+  // Equipo de plataforma: rol admin y SIN colegio. Sus rutas cruzan colegios
+  // (dbGlobal) y nunca muestran datos de los niños (docs/09 §7.2).
+  app.decorate('requireAdmin', async (req: any, reply: any) => {
+    try {
+      await req.jwtVerify();
+    } catch {
+      return reply.code(401).send({ title: 'Sesión expirada', status: 401 });
+    }
+    if (req.user.role !== 'admin' || req.user.institutionId) {
+      return reply.code(403).send({ title: 'Sin permiso', status: 403 });
+    }
   });
 }

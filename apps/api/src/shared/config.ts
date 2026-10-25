@@ -34,6 +34,11 @@ const schema = z.object({
   TUTOR_TIMEOUT_MS: z.coerce.number().default(8000),
 
   STUDENT_MONTHLY_TOKEN_LIMIT: z.coerce.number().default(60000),
+
+  // Opcionales: si están, el panel de administración estima el costo del mes.
+  // Dólares por millón de tokens, según la tarifa vigente del modelo del tutor.
+  PRECIO_USD_MTOK_ENTRADA: z.coerce.number().optional(),
+  PRECIO_USD_MTOK_SALIDA: z.coerce.number().optional(),
   TUTOR_TURNS_PER_MINUTE: z.coerce.number().default(8),
 });
 

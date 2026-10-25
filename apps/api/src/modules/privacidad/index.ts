@@ -4,3 +4,6 @@
 // Expone: el registro de auditoría y las rutas de autorizaciones.
 export { audit, type AuditAction } from './audit.js';
 export { privacidadRoutes } from './routes.js';
+
+// Panel de administración: auditoría de las acciones del equipo.
+export { auditarPlataforma, auditoriaReciente } from './admin.js';

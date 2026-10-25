@@ -250,6 +250,21 @@ async function main() {
     teacherPasswordHash,
   });
 
+  // --- Equipo de plataforma ------------------------------------------------
+  // Rol admin SIN colegio: entra al panel de administración (/admin) y no ve
+  // datos de los niños (docs/09 §7.2).
+  await prisma.user.create({
+    data: {
+      institutionId: null,
+      role: 'admin',
+      firstName: 'Equipo',
+      lastName: 'NativIA',
+      email: 'admin@nativia.local',
+      passwordHash: teacherPasswordHash,
+    },
+  });
+  console.log('  Equipo de plataforma: admin@nativia.local');
+
   // --- Ejes -----------------------------------------------------------------
   for (const axis of AXES) {
     await prisma.axis.upsert({
@@ -330,6 +345,7 @@ async function main() {
   console.log('\nListo.');
   console.log('  Estudiante  → código de curso 4B7K (o 7HWM, el otro colegio), elige tu avatar');
   console.log('  Docente     → docente@demo.local o docente2@demo.local / demo1234');
+  console.log('  Plataforma  → /admin con admin@nativia.local / demo1234');
   console.log('  Elena M. no puede entrar: no tiene autorización del acudiente.');
   console.log('  Mateo R. tiene el presupuesto agotado: verás el modo degradado.');
 }

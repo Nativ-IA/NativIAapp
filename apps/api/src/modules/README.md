@@ -27,7 +27,7 @@ src/
 | `aprendizaje` | Ruta del estudiante, actividades, intentos, dominio, logros | `student_profiles`, `attempts`, `attempt_events`, `metacognition_responses`, `mastery_scores`, `student_badges` | Activo |
 | `tutor` | Diálogo socrático con el LLM, moderación, fuga de respuesta, presupuesto | `llm_interactions`, `llm_turns`, `token_budgets` | Activo · primer candidato a servicio propio |
 | `analitica` | Panel docente: inicio, grupo, detalle, transcripciones, alertas | `teacher_alerts`, `classroom_summaries` | Activo |
-| `plataforma` | Panel de administración del equipo | — | Reservado (`plataforma/README.md`) |
+| `plataforma` | Panel de administración del equipo (`/v1/admin`): pide los datos a cada módulo por su `index.ts` | — (no es dueño de tablas) | Activo |
 | `nati` | Asistente que acompaña al estudiante en todas las pantallas | — | Reservado (`nati/README.md`) |
 
 ## Reglas

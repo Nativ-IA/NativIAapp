@@ -109,3 +109,8 @@ export function activeInstitutionId(): string {
   if (!institutionId) throw new Error('No hay colegio activo en esta petición');
   return institutionId;
 }
+
+/** ¿El error es de un valor que ya existe (índice único)? Código P2002 de Prisma. */
+export function isUniqueViolation(error: unknown): boolean {
+  return (error as { code?: string } | null)?.code === 'P2002';
+}

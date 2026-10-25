@@ -107,6 +107,7 @@ al repo junto con el cambio.
 | Docente | `docente@demo.local` / `demo1234` |
 | Estudiante, otro colegio | Código **`7HWM`**, mismo PIN |
 | Docente, otro colegio | `docente2@demo.local` / `demo1234` |
+| Equipo de plataforma | `/admin` con `admin@nativia.local` / `demo1234` |
 
 Hay dos colegios de demostración para mostrar el multi-colegio: cada docente ve solo su curso y cada
 código lleva solo a los estudiantes de su colegio.

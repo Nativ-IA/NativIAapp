@@ -848,14 +848,17 @@ model ClassroomSummary {
 /// impida UPDATE y DELETE (nota 4 de migración, al final de este archivo).
 model AuditLog {
   id            String  @id @default(cuid())
-  /// Colegio del dato. NULL en acciones del equipo de plataforma.
+  /// Colegio afectado. NULL si la acción no es sobre un colegio.
   institutionId String?
 
   actorId String?
 
   /// "consulta_transcripcion" | "resolucion_alerta" | "cambio_consentimiento" |
   /// "exportacion_datos" | "borrado_derecho_olvido" | "cambio_rol" |
-  /// "ingreso_anomalo" | "cambio_modelo_llm"
+  /// "ingreso_anomalo" | "cambio_modelo_llm" |
+  /// Panel del equipo: "creacion_colegio" | "creacion_sede" | "creacion_curso" |
+  /// "cambio_codigo_ingreso" | "creacion_cuenta" | "asignacion_curso" |
+  /// "activacion_cuenta" | "desactivacion_cuenta" | "restablecimiento_contrasena"
   action     String
   /// Tipo y id del objeto afectado.
   targetType String

@@ -20,7 +20,17 @@ export type AuditAction =
   | 'borrado_derecho_olvido'
   | 'cambio_rol'
   | 'ingreso_anomalo'
-  | 'cambio_modelo_llm';
+  | 'cambio_modelo_llm'
+  // Panel de administración del equipo de plataforma
+  | 'creacion_colegio'
+  | 'creacion_sede'
+  | 'creacion_curso'
+  | 'cambio_codigo_ingreso'
+  | 'creacion_cuenta'
+  | 'asignacion_curso'
+  | 'activacion_cuenta'
+  | 'desactivacion_cuenta'
+  | 'restablecimiento_contrasena';
 
 export async function audit(args: {
   actorId: string | null;
