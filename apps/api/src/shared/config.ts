@@ -7,7 +7,7 @@ import { z } from 'zod';
 // ESTE módulo y no desde process.cwd(): el proceso arranca en apps/api cuando
 // lo lanza pnpm --filter, y buscar por cwd fallaría en silencio.
 const here = dirname(fileURLToPath(import.meta.url));
-loadEnv({ path: resolve(here, '../../../.env') });
+loadEnv({ path: resolve(here, '../../../../.env') });
 
 const schema = z.object({
   PORT: z.coerce.number().default(3000),

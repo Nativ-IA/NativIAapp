@@ -1,0 +1,9 @@
+**/node_modules
+.git
+.env
+apps/web/dist
+apps/api/dist
+**/*.tsbuildinfo
+**/__pycache__
+packages/db/*.db
+packages/db/*.db-journal

@@ -193,6 +193,11 @@ pasa por esos puertos.
 - ❌ No escala horizontalmente por componente. Aceptable: el prototipo atiende un salón.
 - ❌ Requiere disciplina para no cruzar fronteras. Mitigado con `dependency-cruiser` en CI.
 
+**Implementación (2026-10-24).** Nueve módulos en `apps/api/src/modules/` (dos reservados: `plataforma`
+y `nati`) más un núcleo compartido en `apps/api/src/shared/`. Mapa, tablas de cada módulo, reglas y
+deuda conocida: `apps/api/src/modules/README.md`. Las fronteras las verifica `pnpm lint:modules`
+(dependency-cruiser) en `.github/workflows/ci.yml`.
+
 **Alternativas descartadas.** Microservicios desde el inicio (complejidad operativa injustificada);
 funciones serverless (arranque en frío incompatible con el objetivo de p95 < 2,5 s del primer token,
 y el modo local se complica).

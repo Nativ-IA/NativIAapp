@@ -1,8 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '@nativia/db';
-import { config } from '../config.js';
-import { handleTurn } from '../modules/tutor/service.js';
+import { config } from '../../shared/config.js';
+import { handleTurn } from './service.js';
 
 export async function tutorRoutes(app: FastifyInstance) {
   app.addHook('onRequest', app.requireStudent);

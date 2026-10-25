@@ -1,11 +1,13 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '@nativia/db';
-import { AXES } from '@nativia/content';
-import { computeTriage } from '../modules/progress/triage.js';
-import { audit } from '../lib/audit.js';
+import { AXES } from '../contenido/index.js';
+import { computeTriage } from './triage.js';
+import { audit } from '../privacidad/index.js';
+import { canAccessClassroom } from '../instituciones/index.js';
+import { forbidden } from '../../shared/http.js';
 
-export async function teacherRoutes(app: FastifyInstance) {
+export async function analiticaRoutes(app: FastifyInstance) {
   app.addHook('onRequest', app.requireStaff);
 
   // ── Inicio del panel — la prueba de los 60 segundos ────────────────────────
@@ -271,54 +273,9 @@ export async function teacherRoutes(app: FastifyInstance) {
 
     return serializeAlert(updated);
   });
-
-  // ── Estado de autorizaciones ───────────────────────────────────────────────
-  app.get('/classrooms/:classroomId/consents', async (req, reply) => {
-    const { classroomId } = z.object({ classroomId: z.string() }).parse(req.params);
-    if (!(await canAccessClassroom(req.user.sub, classroomId))) return forbidden(reply);
-
-    const students = await prisma.studentProfile.findMany({
-      where: { classroomId, deletedAt: null },
-      include: {
-        user: true,
-        consents: { orderBy: { createdAt: 'desc' }, take: 1 },
-      },
-    });
-
-    const items = students.map((s) => ({
-      studentProfileId: s.id,
-      firstName: s.user.firstName,
-      lastName: s.user.lastName,
-      status: s.consents[0]?.status ?? 'pendiente',
-      policyVersion: s.consents[0]?.policyVersion ?? null,
-    }));
-
-    return {
-      granted: items.filter((i) => i.status === 'otorgado').length,
-      pending: items.filter((i) => i.status === 'pendiente').length,
-      revoked: items.filter((i) => i.status === 'revocado').length,
-      policyVersion: 'v0.1-prototipo',
-      items,
-    };
-  });
 }
 
 // ── Auxiliares ────────────────────────────────────────────────────────────────
-
-async function canAccessClassroom(userId: string, classroomId: string) {
-  const a = await prisma.classroomAssignment.findFirst({
-    where: { userId, classroomId, deletedAt: null },
-  });
-  return a !== null;
-}
-
-function forbidden(reply: any) {
-  return reply.code(403).type('application/problem+json').send({
-    type: 'https://nativia.edu.co/problems/forbidden',
-    title: 'Sin permiso',
-    status: 403,
-  });
-}
 
 const LEVEL_ORDER = ['sin_datos', 'necesita_apoyo', 'va_en_camino', 'lo_maneja_bien'];
 

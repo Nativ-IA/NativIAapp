@@ -129,6 +129,37 @@ pnpm check:palette # verifica la paleta del design system (requiere Python)
 
 ---
 
+## Despliegue de la demo (Google Cloud Run)
+
+Un solo servicio: la API sirve también el front compilado. El `Dockerfile` crea una base SQLite
+limpia con los datos de demostración en cada build, y como Cloud Run no conserva lo que se escribe en
+disco, **cada instancia nueva arranca con esa misma base limpia**. Sirve para mostrar el producto, no
+para guardar datos reales.
+
+Desde Cloud Shell (ya trae `gcloud` y `git`):
+
+```bash
+gcloud config set project ID_DEL_PROYECTO
+gcloud services enable run.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com
+
+git clone https://github.com/Nativ-IA/NativIAapp.git && cd NativIAapp
+
+gcloud run deploy nativia --source . --region us-east1 \
+  --allow-unauthenticated --max-instances 1 --memory 1Gi \
+  --set-env-vars "MOCK_LLM=true,JWT_SECRET=$(openssl rand -hex 24)"
+```
+
+`--max-instances 1` es obligatorio: dos instancias tendrían dos bases distintas.
+
+Para encender el tutor con el modelo real:
+
+```bash
+gcloud run services update nativia --region us-east1 \
+  --update-env-vars "MOCK_LLM=false,ANTHROPIC_API_KEY=sk-ant-...,TUTOR_MODEL=claude-sonnet-5-5,CLASSIFIER_MODEL=claude-haiku-5-5"
+```
+
+---
+
 ## Regla operativa innegociable
 
 **Ningún dato real de un menor entra a este prototipo.** No hay TLS, no hay cifrado en reposo, no hay
