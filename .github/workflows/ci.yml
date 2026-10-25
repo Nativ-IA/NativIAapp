@@ -1,0 +1,36 @@
+# Pruebas, fronteras del monolito modular y build en cada push y pull request.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: file:./nativia.db
+    steps:
+      - uses: actions/checkout@v4
+
+      # Instala la versión de pnpm fijada en package.json (packageManager).
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Generar el cliente de Prisma
+        run: pnpm --filter @nativia/db exec prisma generate --schema=./schema.prisma
+
+      - name: Pruebas
+        run: pnpm test
+
+      - name: Fronteras entre módulos
+        run: pnpm lint:modules
+
+      - name: Build
+        run: pnpm build
