@@ -4,6 +4,7 @@ import { useApp } from '../lib/store';
 import { Avatar, Button, ReadAloudButton, AskTeacherButton } from './ui';
 import { Icon, type IconName } from './Icon';
 import { api } from '../lib/api';
+import { NatiLauncher } from './nati/NatiLauncher';
 
 const TABS: Array<{ to: string; label: string; icon: IconName }> = [
   { to: '/mapa', label: 'Mapa', icon: 'map' },
@@ -181,6 +182,9 @@ export function StudentShell({
       </header>
 
       <main className="flex-1">{children}</main>
+
+      {/* Reservado: Nati, el asistente fijo en pantalla (components/nati). */}
+      <NatiLauncher />
 
       {!hideBottomBar && (
         <nav className="sticky bottom-0 flex items-center justify-around border-t border-line bg-white py-1.5">

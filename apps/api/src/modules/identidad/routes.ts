@@ -3,7 +3,7 @@ import { z } from 'zod';
 import argon2 from 'argon2';
 import { prisma } from '@nativia/db';
 
-export async function authRoutes(app: FastifyInstance) {
+export async function identidadRoutes(app: FastifyInstance) {
   // ── Paso 1 del ingreso del estudiante ──────────────────────────────────────
   app.get('/auth/classroom/:joinCode', async (req, reply) => {
     const { joinCode } = z

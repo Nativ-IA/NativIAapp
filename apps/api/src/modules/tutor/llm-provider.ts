@@ -6,7 +6,7 @@
 // =============================================================================
 
 import Anthropic from '@anthropic-ai/sdk';
-import { config, llmMode } from '../../config.js';
+import { config, llmMode } from '../../shared/config.js';
 
 export interface CompletionRequest {
   system: string;

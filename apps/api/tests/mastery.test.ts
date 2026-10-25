@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { bktUpdate, toLevel, DEFAULT_BKT } from '../src/modules/progress/mastery.js';
+import { bktUpdate, toLevel, DEFAULT_BKT } from '../src/modules/aprendizaje/mastery.js';
 
 describe('Bayesian Knowledge Tracing', () => {
   it('un acierto aumenta la probabilidad de dominio', () => {

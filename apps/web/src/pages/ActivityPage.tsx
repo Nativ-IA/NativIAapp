@@ -301,6 +301,8 @@ export function ActivityPage() {
   if (stage === 'dialogo' && !isTutor) {
     return (
       <StudentShell back="/mapa" title={activity.title} attemptId={attemptId ?? undefined}>
+        {/* Reservado: «Arma tu pregunta» se conecta aquí como un tipo más
+            (components/activities/PromptBuilderActivity.tsx). */}
         {activity.kind === 'comparacion' && (
           <ComparisonActivity
             payload={activity.payload as unknown as ComparisonPayload}

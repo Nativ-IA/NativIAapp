@@ -17,9 +17,9 @@ import {
   type Grade,
   type SocraticTree,
   type TutorPayload,
-} from '@nativia/content';
+} from '../contenido/index.js';
 import { createHash } from 'node:crypto';
-import { config, llmMode } from '../../config.js';
+import { config, llmMode } from '../../shared/config.js';
 import { llmProvider } from './llm-provider.js';
 import {
   moderateInput,

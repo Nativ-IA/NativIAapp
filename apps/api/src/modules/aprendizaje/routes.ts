@@ -1,10 +1,10 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '@nativia/db';
-import { AXES, findActivity, METACOGNITION_QUESTION, METACOGNITION_SCAFFOLDS } from '@nativia/content';
-import { recordEvidence } from '../modules/progress/mastery.js';
+import { AXES, findActivity, METACOGNITION_QUESTION, METACOGNITION_SCAFFOLDS } from '../contenido/index.js';
+import { recordEvidence } from './mastery.js';
 
-export async function studentRoutes(app: FastifyInstance) {
+export async function aprendizajeRoutes(app: FastifyInstance) {
   app.addHook('onRequest', app.requireStudent);
 
   // ── Mapa de rutas ──────────────────────────────────────────────────────────
