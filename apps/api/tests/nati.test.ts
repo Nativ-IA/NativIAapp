@@ -146,6 +146,14 @@ describe('Nati · pipeline', () => {
     expect(r.source).toBe('unsure');
   });
 
+  it('si el verificador contesta vacío o fuera de formato, cuenta como rechazo', async () => {
+    natiDeps.ownModel = fakeModel(['algo']);
+    natiDeps.verifier = fakeVerifier(['', 'no sé']);
+    const r = await handleNatiMessage({ message: 'hola', history: [] });
+    expect(r.source).toBe('unsure');
+    expect(r.rejected).toBe(2);
+  });
+
   it('sin modelo propio responde desde las preguntas frecuentes', async () => {
     const r = await handleNatiMessage({ message: '¿Tú eres una persona?', history: [] });
     expect(r.source).toBe('faq');
@@ -178,5 +186,49 @@ describe('Nati · receta de la buena pregunta', () => {
   it('las preguntas frecuentes siempre devuelven algo', () => {
     expect(faqReply('asdfgh')).toBeTruthy();
     expect(faqReply('como le pregunto bien a una ia')).toMatch(/qué quieres/);
+  });
+});
+
+const { VertexVerifierProvider } = await import('../src/modules/tutor/vertex-verifier.js');
+
+describe('verificador · Gemini en Vertex AI', () => {
+  function fakeFetch(answer: unknown) {
+    const calls: Array<{ url: string; init?: RequestInit }> = [];
+    const impl = (async (url: string | URL | Request, init?: RequestInit) => {
+      calls.push({ url: String(url), init });
+      if (String(url).includes('metadata.google.internal')) {
+        return new Response(JSON.stringify({ access_token: 'tok', expires_in: 3600 }));
+      }
+      return new Response(JSON.stringify(answer));
+    }) as typeof fetch;
+    return { impl, calls };
+  }
+
+  it('llama al endpoint de Vertex con el token del servicio y devuelve la etiqueta', async () => {
+    const { impl, calls } = fakeFetch({ choices: [{ message: { content: ' APROBADA\n' } }] });
+    const v = new VertexVerifierProvider('mi-proyecto', 'global', 'gemini-x', impl);
+    expect(await v.classify('sistema', 'entrada')).toBe('aprobada');
+
+    const llamada = calls.find((c) => c.url.includes('aiplatform'))!;
+    expect(llamada.url).toBe(
+      'https://aiplatform.googleapis.com/v1/projects/mi-proyecto/locations/global/endpoints/openapi/chat/completions',
+    );
+    expect((llamada.init?.headers as Record<string, string>).Authorization).toBe('Bearer tok');
+    expect(JSON.parse(String(llamada.init?.body)).model).toBe('google/gemini-x');
+  });
+
+  it('usa el host regional y reutiliza el token entre llamadas', async () => {
+    const { impl, calls } = fakeFetch({ choices: [{ message: { content: 'rechazada' } }] });
+    const v = new VertexVerifierProvider('p', 'us-east1', 'm', impl);
+    expect(v.endpoint()).toMatch(/^https:\/\/us-east1-aiplatform\.googleapis\.com\//);
+    await v.classify('s', 'i');
+    await v.classify('s', 'i');
+    expect(calls.filter((c) => c.url.includes('metadata')).length).toBe(1);
+  });
+
+  it('sin contenido devuelve texto vacío (y el servicio lo trata como rechazo)', async () => {
+    const { impl } = fakeFetch({ choices: [{ message: { content: null } }] });
+    const v = new VertexVerifierProvider('p', 'global', 'm', impl);
+    expect(await v.classify('s', 'i')).toBe('');
   });
 });

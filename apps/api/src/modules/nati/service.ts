@@ -9,21 +9,25 @@
 //       · otro dato personal     → respuesta fija, NO se llama a ningún modelo
 //   2 modelo propio (Qwen3.5-2B + LoRA) con el system prompt del entrenamiento
 //   3 verificador: modelo externo barato que ve el mensaje del niño Y la
-//     respuesta; si rechaza, un reintento; si rechaza otra vez, mensaje fijo
+//     respuesta; si rechaza, un reintento; si rechaza otra vez, mensaje fijo.
+//     Es Claude Haiku (Anthropic) o Gemini en Vertex AI, según NATI_VERIFIER.
 //   4 sin modelo propio o caído → preguntas frecuentes pregrabadas
 //
 // Nunca se muestra al niño una respuesta del modelo propio sin verificar
-// cuando hay verificador disponible. Sin verificador (MOCK_LLM=true), el
-// modelo propio se usa igual: es la demo, y queda registrado como tal.
+// cuando hay verificador disponible. Si el verificador contesta algo que no es
+// APROBADA ni RECHAZADA, cuenta como rechazo. Sin verificador
+// (NATI_VERIFIER=none, o anthropic con MOCK_LLM=true), el modelo propio se usa
+// igual: es la demo, y queda registrado como tal.
 // =============================================================================
 
-import { config, natiMode, llmMode } from '../../shared/config.js';
+import { config, natiMode, natiVerifierMode } from '../../shared/config.js';
 import {
   moderateInput,
   containmentReply,
   checkOutputVocabulary,
   llmProvider,
   OwnModelProvider,
+  VertexVerifierProvider,
   type LLMProvider,
 } from '../tutor/index.js';
 import {
@@ -60,11 +64,20 @@ const ownModel: LLMProvider | null =
     ? new OwnModelProvider(config.NATI_MODEL_URL!, config.NATI_MODEL_API_KEY)
     : null;
 
+const verifier: LLMProvider =
+  natiVerifierMode === 'vertex'
+    ? new VertexVerifierProvider(
+        config.VERTEX_PROJECT!,
+        config.VERTEX_LOCATION,
+        config.VERTEX_VERIFIER_MODEL,
+      )
+    : llmProvider;
+
 /** Se puede inyectar en las pruebas. */
 export const natiDeps = {
   ownModel,
-  verifier: llmProvider,
-  verifierAvailable: () => llmMode === 'live',
+  verifier,
+  verifierAvailable: () => natiVerifierMode !== 'none',
 };
 
 // ── Respuestas pregrabadas ───────────────────────────────────────────────────
@@ -91,7 +104,9 @@ export async function verifyReply(
       `Mensaje del niño: "${childMessage}"\n\nRespuesta de Nati: "${reply}"`,
     );
     if (verdict.includes('rechaz')) return { approved: false, reason: 'verificador: rechazada' };
-    return { approved: true, reason: 'verificador: aprobada' };
+    if (verdict.includes('aprob')) return { approved: true, reason: 'verificador: aprobada' };
+    // Respuesta vacía o fuera de formato: ante la duda, no se muestra.
+    return { approved: false, reason: 'verificador: respuesta no reconocida' };
   } catch {
     // Verificador caído: ante la duda, no se muestra la respuesta del modelo.
     return { approved: false, reason: 'verificador no disponible' };

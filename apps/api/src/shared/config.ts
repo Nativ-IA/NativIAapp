@@ -44,6 +44,18 @@ const schema = z.object({
   NATI_MODEL_MAX_TOKENS: z.coerce.number().default(160),
   NATI_MODEL_TIMEOUT_MS: z.coerce.number().default(20000),
 
+  // Verificador de Nati: revisa cada respuesta del modelo propio antes de
+  // mostrarla.
+  //   anthropic → CLASSIFIER_MODEL con ANTHROPIC_API_KEY (y MOCK_LLM=false)
+  //   vertex    → Gemini en Vertex AI con la identidad del servicio de Cloud
+  //               Run: sin clave, y se cobra al proyecto de Google Cloud
+  //   none      → sin verificador (solo para desarrollo)
+  NATI_VERIFIER: z.enum(['anthropic', 'vertex', 'none']).default('anthropic'),
+  VERTEX_PROJECT: z.string().optional(),
+  VERTEX_LOCATION: z.string().default('global'),
+  VERTEX_VERIFIER_MODEL: z.string().default('gemini-3.5-flash-lite'),
+  NATI_VERIFIER_TIMEOUT_MS: z.coerce.number().default(5000),
+
   // Opcionales: si están, el panel de administración estima el costo del mes.
   // Dólares por millón de tokens, según la tarifa vigente del modelo del tutor.
   PRECIO_USD_MTOK_ENTRADA: z.coerce.number().optional(),
@@ -76,6 +88,16 @@ export const llmMode: 'mock' | 'live' =
  *  frecuentes pregrabadas. Es independiente de MOCK_LLM: el modelo propio no
  *  cuesta tokens de un proveedor externo. */
 export const natiMode: 'faq' | 'own_model' = config.NATI_MODEL_URL ? 'own_model' : 'faq';
+
+if (config.NATI_VERIFIER === 'vertex' && !config.VERTEX_PROJECT) {
+  console.error('NATI_VERIFIER=vertex necesita VERTEX_PROJECT (el id del proyecto de Google Cloud).');
+  process.exit(1);
+}
+
+/** Verificador efectivo de Nati. Con 'anthropic' solo hay verificador si el
+ *  proveedor de Anthropic está en vivo. */
+export const natiVerifierMode: 'anthropic' | 'vertex' | 'none' =
+  config.NATI_VERIFIER === 'anthropic' && llmMode !== 'live' ? 'none' : config.NATI_VERIFIER;
 
 if (llmMode === 'mock') {
   console.log(

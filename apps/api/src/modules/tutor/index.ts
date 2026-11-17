@@ -19,3 +19,4 @@ export {
 } from './moderation.js';
 export { llmProvider, type LLMProvider, type CompletionRequest } from './llm-provider.js';
 export { OwnModelProvider } from './nati-provider.js';
+export { VertexVerifierProvider } from './vertex-verifier.js';
