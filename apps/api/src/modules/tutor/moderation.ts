@@ -45,6 +45,14 @@ const PII_PATTERNS: Array<{ tag: string; re: RegExp; replacement: string }> = [
     replacement: '[dato oculto]',
   },
   {
+    // «mi clave es gatito123», «contraseña: tigre2015», «mi pass del juego es …».
+    // El caso real que motivó la regla: el modelo propio agradeció la clave en
+    // vez de advertir. Se redacta el valor; la respuesta fija la da la ruta.
+    tag: 'contrasena',
+    re: /\b(?:contrase[ñn]a|clave|pass(?:word)?|pin)\b[^\n:=]{0,25}?(?:es|:|=)\s*\S+/gi,
+    replacement: 'contraseña [dato oculto]',
+  },
+  {
     tag: 'red_social',
     re: /(?:@[\w.]{3,}|(?:instagram|tiktok|facebook|whatsapp|wpp)\s*:?\s*[\w.]+)/gi,
     replacement: '[dato oculto]',
@@ -129,7 +137,16 @@ const FORBIDDEN_VOCAB = [
   'parametros',
 ];
 
-export function checkOutputVocabulary(text: string): string[] {
+/** En el modo ayudante de Nati, «prompt» y «entrenamiento» SÍ se dicen: es
+ *  justamente lo que enseña (decisión del equipo, taller de preguntas B2/B3). */
+const HELPER_ALLOWED = new Set(['prompt', 'entrenamiento']);
+
+export function checkOutputVocabulary(
+  text: string,
+  mode: 'tutor' | 'ayudante' = 'tutor',
+): string[] {
   const lower = text.toLowerCase();
-  return FORBIDDEN_VOCAB.filter((w) => lower.includes(w));
+  return FORBIDDEN_VOCAB.filter(
+    (w) => lower.includes(w) && !(mode === 'ayudante' && HELPER_ALLOWED.has(w)),
+  );
 }

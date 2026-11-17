@@ -23,6 +23,10 @@ const ROUTES: Array<[string, string]> = [
   // tutor
   ['POST', '/v1/tutor/turn'],
   ['POST', '/v1/tutor/ask-teacher'],
+  // nati (modo ayudante)
+  ['GET', '/v1/nati/config'],
+  ['POST', '/v1/nati/message'],
+  ['POST', '/v1/nati/workshop'],
   // analítica docente
   ['GET', '/v1/classrooms/:classroomId/overview'],
   ['GET', '/v1/classrooms/:classroomId/heatmap'],

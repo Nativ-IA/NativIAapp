@@ -5,6 +5,8 @@
 //   comparacion       → Eje A · el niño predice, luego compara con la máquina
 //   clasificacion     → Ejes A y C · ¿real o hecho por IA? con justificación
 //   dilema_ramificado → Eje D · elegir, ver consecuencias, argumentar
+//   constructor_instrucciones → Eje B · armar una pregunta con bloques (sin red)
+//   taller_instrucciones      → Eje B · escribir la pregunta y que Nati la revise
 //
 // Los tres últimos se corrigen en el dispositivo: funcionan sin conexión y sin
 // consumir un solo token. Solo el Eje B necesita red.
@@ -32,6 +34,14 @@ import {
   type ClassificationPayload,
 } from '../components/activities/ClassificationActivity';
 import { DilemmaActivity, type DilemmaPayload } from '../components/activities/DilemmaActivity';
+import {
+  PromptBuilderActivity,
+  type PromptBuilderPayload,
+} from '../components/activities/PromptBuilderActivity';
+import {
+  PromptWorkshopActivity,
+  type PromptWorkshopPayload,
+} from '../components/activities/PromptWorkshopActivity';
 
 type Stage = 'intro' | 'dialogo' | 'metacognicion' | 'resultado';
 
@@ -253,6 +263,14 @@ export function ActivityPage() {
         title: 'Aquí no hay una única respuesta correcta.',
         body: 'Vas a elegir y después vas a ver qué pasa en cada camino.',
       },
+      constructor_instrucciones: {
+        title: 'La IA responde según cómo le preguntes.',
+        body: 'Vas a armar la misma pregunta de dos formas y a comparar.',
+      },
+      taller_instrucciones: {
+        title: 'Nati no va a escribir la pregunta por ti.',
+        body: 'Tú la escribes y ella te dice qué le falta.',
+      },
     };
     const head = heads[activity.kind] ?? heads.tutor_socratico;
 
@@ -301,8 +319,34 @@ export function ActivityPage() {
   if (stage === 'dialogo' && !isTutor) {
     return (
       <StudentShell back="/mapa" title={activity.title} attemptId={attemptId ?? undefined}>
-        {/* Reservado: «Arma tu pregunta» se conecta aquí como un tipo más
-            (components/activities/PromptBuilderActivity.tsx). */}
+        {activity.kind === 'constructor_instrucciones' && (
+          <PromptBuilderActivity
+            payload={activity.payload as unknown as PromptBuilderPayload}
+            onFinish={({ checkedCorrectly }) =>
+              finishLocal({
+                isCorrect: true,
+                hintsUsed: checkedCorrectly ? 0 : 1,
+                // Justificó al elegir cómo comprobar lo que dijo la IA.
+                hasValidJustification: checkedCorrectly,
+                independentVerification: false,
+              })
+            }
+          />
+        )}
+
+        {activity.kind === 'taller_instrucciones' && (
+          <PromptWorkshopActivity
+            payload={activity.payload as unknown as PromptWorkshopPayload}
+            onFinish={({ completed, total, reviews }) =>
+              finishLocal({
+                isCorrect: completed >= Math.ceil(total / 2),
+                hintsUsed: Math.max(0, reviews - total),
+                hasValidJustification: completed > 0,
+                independentVerification: false,
+              })
+            }
+          />
+        )}
         {activity.kind === 'comparacion' && (
           <ComparisonActivity
             payload={activity.payload as unknown as ComparisonPayload}
@@ -508,6 +552,18 @@ export function ActivityPage() {
                 {outcome?.changedMind && <Did>Cambiaste de idea al ver las consecuencias</Did>}
               </>
             )}
+            {activity.kind === 'constructor_instrucciones' && (
+              <>
+                <Did>Viste que la misma IA responde distinto según la pregunta</Did>
+                {outcome?.hasValidJustification && <Did>Supiste cómo comprobar lo que dijo</Did>}
+              </>
+            )}
+            {activity.kind === 'taller_instrucciones' && (
+              <>
+                <Did>Escribiste tus propias instrucciones</Did>
+                {outcome?.isCorrect && <Did>Les pusiste los tres ingredientes</Did>}
+              </>
+            )}
           </ul>
 
           <h2 className="pt-4 text-body font-bold">Para la próxima</h2>
@@ -519,6 +575,10 @@ export function ActivityPage() {
               'Ninguna señal funciona sola: busca dos.'}
             {activity.kind === 'dilema_ramificado' &&
               'Piensa a quién le afecta tu decisión, además de a ti.'}
+            {activity.kind === 'constructor_instrucciones' &&
+              'Antes de preguntarle a una IA, piensa para quién y cómo lo quieres.'}
+            {activity.kind === 'taller_instrucciones' &&
+              'Después de pedir, revisa: ese ingrediente es solo tuyo.'}
           </p>
         </div>
 

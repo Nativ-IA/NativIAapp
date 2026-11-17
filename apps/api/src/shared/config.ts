@@ -35,6 +35,15 @@ const schema = z.object({
 
   STUDENT_MONTHLY_TOKEN_LIMIT: z.coerce.number().default(60000),
 
+  // Modelo propio de Nati (modo ayudante): Qwen3.5-2B + LoRA servido por
+  // llama-server (API compatible con OpenAI). Sin URL, Nati responde desde las
+  // preguntas frecuentes pregrabadas. Ver deploy/nati-model/README.md.
+  NATI_MODEL_URL: z.string().url().optional(),
+  NATI_MODEL_API_KEY: z.string().optional(),
+  NATI_MODEL_TEMPERATURE: z.coerce.number().default(0.3),
+  NATI_MODEL_MAX_TOKENS: z.coerce.number().default(160),
+  NATI_MODEL_TIMEOUT_MS: z.coerce.number().default(20000),
+
   // Opcionales: si están, el panel de administración estima el costo del mes.
   // Dólares por millón de tokens, según la tarifa vigente del modelo del tutor.
   PRECIO_USD_MTOK_ENTRADA: z.coerce.number().optional(),
@@ -62,6 +71,11 @@ process.env.DATABASE_URL_UNPOOLED ??= config.DATABASE_URL;
  *  degradar desde el inicio (US-12). */
 export const llmMode: 'mock' | 'live' =
   config.MOCK_LLM || !config.ANTHROPIC_API_KEY ? 'mock' : 'live';
+
+/** Modo del asistente Nati: modelo propio si hay URL, si no, preguntas
+ *  frecuentes pregrabadas. Es independiente de MOCK_LLM: el modelo propio no
+ *  cuesta tokens de un proveedor externo. */
+export const natiMode: 'faq' | 'own_model' = config.NATI_MODEL_URL ? 'own_model' : 'faq';
 
 if (llmMode === 'mock') {
   console.log(
