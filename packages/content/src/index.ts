@@ -1,8 +1,11 @@
 export * from './types.js';
 export * from './prompts.js';
+export * from './nati.js';
 
 import type { Activity, AxisCode } from './types.js';
 import { b1Repartidor } from './activities/b1-repartidor.js';
+import { b2ArmaTuPregunta } from './activities/b2-arma-tu-pregunta.js';
+import { b3TallerDePreguntas } from './activities/b3-taller-de-preguntas.js';
 import {
   a1MaquinaAdivina,
   c3AnimalNoExiste,
@@ -54,6 +57,8 @@ export const AXES: Array<{
 export const ACTIVITIES: Activity[] = [
   a1MaquinaAdivina,
   b1Repartidor,
+  b2ArmaTuPregunta,
+  b3TallerDePreguntas,
   c3AnimalNoExiste,
   d1TareaHermanita,
 ];

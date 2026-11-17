@@ -12,7 +12,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { ACTIVITIES } from '@nativia/content';
-import type { ClassificationPayload } from '@nativia/content';
+import type { ClassificationPayload, PromptBuilderPayload } from '@nativia/content';
 
 const clasificaciones = ACTIVITIES.filter((a) => a.kind === 'clasificacion');
 
@@ -108,5 +108,38 @@ describe('higiene de marca en el contenido', () => {
     expect(json).not.toMatch(/NativIA\.\s*Esta ave/);
     expect(json, 'el nombre del producto no debe aparecer dentro del contenido')
       .not.toMatch(/"[^"]*\bNativIA\b[^"]*"/);
+  });
+});
+
+describe('«Arma tu pregunta» (constructor_instrucciones)', () => {
+  const builders = ACTIVITIES.filter((a) => a.kind === 'constructor_instrucciones');
+
+  it('existe y está publicada', () => {
+    expect(builders.length).toBeGreaterThan(0);
+  });
+
+  it('toda combinación de bloques tiene una respuesta preparada', () => {
+    for (const a of builders) {
+      const p = a.payload as PromptBuilderPayload;
+      for (const q of p.slots.que) {
+        expect(p.vagueAnswers[q.key], `${a.slug}: falta respuesta vaga para ${q.key}`).toBeTruthy();
+        expect(p.checkQuestions[q.key], `${a.slug}: falta pregunta de revisión para ${q.key}`).toBeTruthy();
+        for (const w of p.slots.para_quien) {
+          for (const c of p.slots.como) {
+            const k = `${q.key}|${w.key}|${c.key}`;
+            expect(p.fullAnswers[k], `${a.slug}: falta respuesta para ${k}`).toBeTruthy();
+          }
+        }
+      }
+    }
+  });
+
+  it('cada pregunta de revisión tiene exactamente una opción correcta', () => {
+    for (const a of builders) {
+      const p = a.payload as PromptBuilderPayload;
+      for (const [k, cq] of Object.entries(p.checkQuestions)) {
+        expect(cq.options.filter((o) => o.isCorrect).length, `${a.slug}/${k}`).toBe(1);
+      }
+    }
   });
 });

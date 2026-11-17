@@ -126,3 +126,23 @@ export interface TutorTurn {
   budgetRemaining: number;
   latencyMs: number;
 }
+
+// ── Nati, modo ayudante ───────────────────────────────────────────────────────
+
+export interface NatiConfig {
+  mode: 'faq' | 'own_model';
+  suggestedQuestions: string[];
+  recipe: Array<{ key: 'que' | 'para_quien' | 'como' | 'revisar'; label: string; hint: string }>;
+}
+
+export interface NatiReply {
+  content: string;
+  source: 'own_model' | 'faq' | 'safety' | 'unsure';
+  rejected: number;
+  suggestAskTeacher: boolean;
+  latencyMs: number;
+}
+
+export interface WorkshopReply extends NatiReply {
+  recipe: Record<'que' | 'para_quien' | 'como' | 'revisar', boolean>;
+}

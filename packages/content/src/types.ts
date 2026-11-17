@@ -14,7 +14,13 @@ export type ActivityKind =
   | 'tutor_socratico'
   | 'clasificacion'
   | 'dilema_ramificado'
-  | 'comparacion';
+  | 'comparacion'
+  /** «Arma tu pregunta»: el niño compone una instrucción con bloques y compara
+   *  respuestas preparadas. Sin red, sin tokens. */
+  | 'constructor_instrucciones'
+  /** Taller con Nati: el niño escribe su propia instrucción y Nati (el modelo
+   *  propio, modo ayudante) le dice qué ingrediente de la receta le falta. */
+  | 'taller_instrucciones';
 
 export type BloomLevel =
   | 'recordar'
@@ -126,6 +132,46 @@ export interface TutorPayload {
   questionPath: string[];
 }
 
+/** La «receta de la buena pregunta», común a B2, B3 y al modo ayudante de Nati. */
+export type RecipeIngredient = 'que' | 'para_quien' | 'como' | 'revisar';
+
+/** Contenido de «Arma tu pregunta» (constructor_instrucciones, eje B).
+ *
+ *  Tres ranuras (qué quiero, para quién, cómo lo quiero). Cada combinación de
+ *  bloques tiene una respuesta PREPARADA y revisada por el equipo: nada
+ *  generado en vivo llega al niño, y así funciona sin internet. La respuesta a
+ *  la pregunta vaga (solo el bloque «qué») se muestra primero para que el niño
+ *  vea la diferencia por sí mismo. */
+export interface PromptBuilderPayload {
+  intro: string;
+  /** Lo que el niño quiere lograr; la ranura «qué» fija el tema. */
+  slots: {
+    que: Array<{ key: string; label: string }>;
+    para_quien: Array<{ key: string; label: string }>;
+    como: Array<{ key: string; label: string }>;
+  };
+  /** Respuesta de «la IA» a la pregunta vaga, por cada bloque «qué». */
+  vagueAnswers: Record<string, string>;
+  /** Respuesta de «la IA» a la pregunta completa. Clave: `${que}|${para_quien}|${como}`. */
+  fullAnswers: Record<string, string>;
+  /** Cuarto ingrediente: qué revisar en la respuesta completa. Clave: bloque «qué». */
+  checkQuestions: Record<string, { question: string; options: Array<{ key: string; label: string; isCorrect: boolean }>; explanation: string }>;
+  closing: string;
+}
+
+/** Contenido del taller con Nati (taller_instrucciones, eje B). */
+export interface PromptWorkshopPayload {
+  intro: string;
+  /** Retos: cada uno pide escribir una instrucción para una situación. */
+  challenges: Array<{
+    id: string;
+    situation: string;
+    /** Ejemplo de instrucción vaga, para arrancar. */
+    weakExample: string;
+  }>;
+  closing: string;
+}
+
 export interface Activity {
   slug: string;
   title: string;
@@ -155,7 +201,9 @@ export interface Activity {
     | TutorPayload
     | ClassificationPayload
     | DilemmaPayload
-    | ComparisonPayload;
+    | ComparisonPayload
+    | PromptBuilderPayload
+    | PromptWorkshopPayload;
 
   /** Sin revisor humano, la actividad no se publica (salvaguarda ética 7). */
   reviewedBy: string | null;
