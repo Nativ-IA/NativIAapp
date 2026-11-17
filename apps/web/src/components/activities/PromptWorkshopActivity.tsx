@@ -38,13 +38,17 @@ export function PromptWorkshopActivity({
   const [idx, setIdx] = useState(0);
   const [draft, setDraft] = useState('');
   const [reply, setReply] = useState<WorkshopReply | null>(null);
+  // Texto que Nati revisó. Si el niño lo cambia, la revisión ya no aplica.
+  const [reviewed, setReviewed] = useState('');
   const [thinking, setThinking] = useState(false);
   const [completed, setCompleted] = useState(0);
   const [reviews, setReviews] = useState(0);
   const [done, setDone] = useState(false);
 
   const challenge = payload.challenges[idx];
-  const solved = reply ? reply.recipe.que && reply.recipe.para_quien && reply.recipe.como : false;
+  const stale = reply !== null && draft.trim() !== reviewed;
+  const solved =
+    reply && !stale ? reply.recipe.que && reply.recipe.para_quien && reply.recipe.como : false;
 
   async function review() {
     const instruction = draft.trim();
@@ -56,6 +60,7 @@ export function PromptWorkshopActivity({
         instruction,
       });
       setReply(r);
+      setReviewed(instruction);
       setReviews((n) => n + 1);
     } catch (e) {
       setReply({
@@ -69,6 +74,7 @@ export function PromptWorkshopActivity({
         latencyMs: 0,
         recipe: { que: false, para_quien: false, como: false, revisar: false },
       });
+      setReviewed(instruction);
     } finally {
       setThinking(false);
     }
@@ -81,6 +87,7 @@ export function PromptWorkshopActivity({
       setIdx(idx + 1);
       setDraft('');
       setReply(null);
+      setReviewed('');
     } else {
       setDone(true);
     }
@@ -144,7 +151,13 @@ export function PromptWorkshopActivity({
         {thinking ? 'Nati está leyendo…' : reply ? 'Revisar otra vez' : 'Que Nati la revise'}
       </Button>
 
-      {reply && (
+      {reply && stale && (
+        <p className="rounded-md border-2 border-line p-3 text-body text-ink-2">
+          Cambiaste tu instrucción. Pídele a Nati que la revise otra vez.
+        </p>
+      )}
+
+      {reply && !stale && (
         <section className="space-y-3">
           {/* Los ingredientes, marcados por el servidor. */}
           <ul className="flex flex-wrap gap-2" aria-label="Ingredientes de tu instrucción">
