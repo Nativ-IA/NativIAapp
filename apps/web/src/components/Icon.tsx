@@ -58,7 +58,10 @@ export type IconName =
   | 'cpu'
   | 'info'
   | 'chevron-up'
-  | 'send';
+  | 'send'
+  | 'copy'
+  | 'download'
+  | 'share';
 
 /** Trazos de cada icono. Rejilla de 24×24, sin relleno salvo donde se indica. */
 const PATHS: Record<IconName, JSX.Element> = {
@@ -306,6 +309,28 @@ const PATHS: Record<IconName, JSX.Element> = {
   ),
   'chevron-up': <path d="m18 15-6-6-6 6" />,
   send: <path d="M5 12h14M13 6l6 6-6 6" />,
+  // Acciones de la página del código QR.
+  copy: (
+    <>
+      <rect x="9" y="9" width="12" height="12" rx="2" />
+      <path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" />
+    </>
+  ),
+  download: (
+    <>
+      <path d="M12 4v11" />
+      <path d="m7 11 5 5 5-5" />
+      <path d="M4 20h16" />
+    </>
+  ),
+  share: (
+    <>
+      <circle cx="18" cy="5" r="3" />
+      <circle cx="6" cy="12" r="3" />
+      <circle cx="18" cy="19" r="3" />
+      <path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4" />
+    </>
+  ),
 };
 
 /** Iconos que se dibujan con relleno y no con trazo. */

@@ -14,10 +14,11 @@
 // Flujo común: intro → actividad → cierre metacognitivo (obligatorio) → resultado.
 // =============================================================================
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api, ApiError, type ActivityDetail, type TutorTurn, type TutorPayloadDTO } from '../lib/api';
 import { useApp } from '../lib/store';
+import { uuid } from '../lib/uuid';
 import { StudentShell } from '../components/AppShell';
 import { AIDisclosure } from '../components/AIDisclosure';
 import { LLMChat, type ChatMessage } from '../components/LLMChat';
@@ -99,6 +100,12 @@ export function ActivityPage() {
   const [degraded, setDegraded] = useState(false);
   const [turns, setTurns] = useState(0);
 
+  // En celular y en tableta vertical el problema y la conversación no caben
+  // lado a lado: van en dos pestañas. Se empieza por el problema, que hay que
+  // leer antes de conversar.
+  const [tab, setTab] = useState<'problema' | 'chat'>('problema');
+  const verifRef = useRef<HTMLTextAreaElement>(null);
+
   // Widget «Mi comprobación»: produce la North Star Metric (ISVI). Visible
   // desde el primer segundo, no al final — sugiere la conducta antes de que
   // el tutor la pida.
@@ -123,7 +130,7 @@ export function ActivityPage() {
     try {
       const attempt = await api.post<{ id: string }>(
         `/activities/${activity.id}/attempts`,
-        { clientAttemptId: crypto.randomUUID(), mode: navigator.onLine ? 'online' : 'degradado_sin_red' },
+        { clientAttemptId: uuid(), mode: navigator.onLine ? 'online' : 'degradado_sin_red' },
       );
       setAttemptId(attempt.id);
       setStage('dialogo');
@@ -155,7 +162,7 @@ export function ActivityPage() {
     try {
       const turn = await api.post<TutorTurn>('/tutor/turn', {
         attemptId,
-        clientTurnId: crypto.randomUUID(),
+        clientTurnId: uuid(),
         message: text,
         choiceKey,
       });
@@ -229,7 +236,7 @@ export function ActivityPage() {
   if (!activity) {
     return (
       <StudentShell back="/mapa">
-        <div className="mx-auto max-w-3xl space-y-4 p-8">
+        <div className="mx-auto max-w-3xl space-y-4 px-4 py-6 sm:p-8">
           <Skeleton className="h-10 w-2/3" />
           <Skeleton className="h-40" />
         </div>
@@ -279,7 +286,7 @@ export function ActivityPage() {
         back="/mapa"
         readAloudText={`${activity.title}. ${head.title} ${head.body}`}
       >
-        <div className="mx-auto max-w-2xl space-y-6 p-8 text-center">
+        <div className="mx-auto max-w-2xl space-y-6 px-4 py-6 text-center sm:p-8">
           <div className="flex justify-center">
             <Emblem axis={activity.axisCode as 'A' | 'B' | 'C' | 'D'} size={64} />
           </div>
@@ -302,7 +309,7 @@ export function ActivityPage() {
               con el color y el icono `ai`, que están reservados para marcar
               salida de máquina (§7.3): usarlos aquí gastaba la única señal
               ética del producto en un texto que no la necesitaba. */}
-          <div className="rounded-lg border-2 border-brand bg-brand-soft p-5 text-left">
+          <div className="rounded-lg border-2 border-brand bg-brand-soft p-4 text-left sm:p-5">
             <p className="text-body-lg font-bold">{head.title}</p>
             <p className="mt-1.5 text-body">{head.body}</p>
           </div>
@@ -403,22 +410,73 @@ export function ActivityPage() {
 
   // ── Diálogo ────────────────────────────────────────────────────────────────
   if (stage === 'dialogo') {
+    const TABS = [
+      { key: 'problema', label: 'El problema', icon: 'book' },
+      { key: 'chat', label: 'Tu conversación', icon: 'message' },
+    ] as const;
+
     return (
       <StudentShell
         back="/mapa"
         title={activity.title}
         attemptId={attemptId ?? undefined}
         hideBottomBar
+        fill
         readAloudText={`${payload.problem}. La IA respondió: ${payload.aiAnswer}`}
       >
-        <div className="grid h-[calc(100vh-64px)] grid-rows-[auto,1fr] lg:grid-cols-2 lg:grid-rows-1">
+        {/* Desde 1024 px: dos columnas, el problema fijo a la izquierda y la
+            conversación a la derecha.
+
+            Por debajo no caben juntos. Apilados, el problema se quedaba con
+            toda la pantalla y a la conversación le quedaba una franja de un
+            dedo de alto, así que van en dos pestañas que ocupan la pantalla
+            completa, cada una con su propio scroll. */}
+        <div className="flex h-full flex-col lg:grid lg:grid-cols-2 lg:grid-rows-[minmax(0,1fr)]">
+          <div
+            role="tablist"
+            aria-label="Partes de la actividad"
+            className="flex shrink-0 border-b border-line lg:hidden"
+          >
+            {TABS.map((t) => (
+              <button
+                key={t.key}
+                role="tab"
+                id={`tab-${t.key}`}
+                aria-selected={tab === t.key}
+                aria-controls={`panel-${t.key}`}
+                onClick={() => setTab(t.key)}
+                className={`-mb-px flex min-h-touch flex-1 items-center justify-center gap-1.5 whitespace-nowrap border-b-[3px] px-1 text-small font-bold transition-colors sm:gap-2 ${
+                  tab === t.key ? 'border-brand text-brand' : 'border-transparent text-ink-2'
+                }`}
+              >
+                <Icon name={t.icon} size={18} />
+                {t.label}
+              </button>
+            ))}
+          </div>
+
           {/* El problema queda fijo: el niño no debe hacer scroll para recordar
               el enunciado. La carga cognitiva va al razonamiento. */}
-          <section className="space-y-4 overflow-y-auto border-b border-line p-6 lg:border-b-0 lg:border-r">
-            <h2 className="text-small font-bold text-ink-3">El problema</h2>
+          <section
+            id="panel-problema"
+            role="tabpanel"
+            aria-labelledby="tab-problema"
+            className={`min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:p-6 lg:block lg:border-r lg:border-line ${
+              tab === 'problema' ? '' : 'hidden'
+            }`}
+          >
+            <h2 className="hidden text-small font-bold text-ink-3 lg:block">El problema</h2>
             <p className="prose-block whitespace-pre-line text-body-lg">{payload.problem}</p>
 
             <AIDisclosure>{payload.aiAnswer}</AIDisclosure>
+
+            {/* Solo con pestañas: el paso a la conversación tiene que verse sin
+                que el niño descubra que la otra pestaña existe. */}
+            <div className="lg:hidden">
+              <Button axis={axis} full onClick={() => setTab('chat')}>
+                {turns === 0 ? 'Conversar con el tutor' : 'Volver a la conversación'}
+              </Button>
+            </div>
 
             <div>
               <label
@@ -433,6 +491,7 @@ export function ActivityPage() {
               </p>
               <textarea
                 id="verif"
+                ref={verifRef}
                 value={verification}
                 onChange={(e) => setVerification(e.target.value)}
                 rows={3}
@@ -455,8 +514,13 @@ export function ActivityPage() {
             </Button>
           </section>
 
-          <section className="flex min-h-0 flex-col">
-            <h2 className="border-b border-line px-6 py-3 text-small font-bold text-ink-3">
+          <section
+            id="panel-chat"
+            role="tabpanel"
+            aria-labelledby="tab-chat"
+            className={`min-h-0 flex-1 flex-col lg:flex ${tab === 'chat' ? 'flex' : 'hidden'}`}
+          >
+            <h2 className="hidden border-b border-line px-6 py-3 text-small font-bold text-ink-3 lg:block">
               Tu conversación
               {/* La causa de la degradación importa. El tutor puede estar
                   sirviendo el árbol pregrabado por falta de red, por
@@ -477,6 +541,30 @@ export function ActivityPage() {
                 offline={!online}
                 onSend={(t) => sendTurn(t)}
                 onChoose={(key, label) => sendTurn(label, key)}
+                visible={tab === 'chat'}
+                footer={
+                  // Con pestañas, «Terminar» vive en la otra, junto a «Mi
+                  // comprobación». Este botón lleva allá en vez de terminar
+                  // desde aquí: si se pudiera cerrar la actividad sin pasar por
+                  // la comprobación, casi nadie la escribiría, y es justo la
+                  // conducta que la actividad busca.
+                  turns >= 2 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTab('problema');
+                        requestAnimationFrame(() => {
+                          verifRef.current?.scrollIntoView({ block: 'center' });
+                          verifRef.current?.focus({ preventScroll: true });
+                        });
+                      }}
+                      className="flex min-h-touch w-full items-center justify-center gap-2 rounded-md border-2 border-line bg-white px-4 text-body font-semibold text-ink active:bg-surf lg:hidden"
+                    >
+                      <Icon name="pen" size={18} />
+                      Escribir mi comprobación
+                    </button>
+                  )
+                }
               />
             </div>
           </section>
@@ -505,7 +593,7 @@ export function ActivityPage() {
   // correcta, que es el hábito que este producto combate.
   return (
     <StudentShell hideBottomBar readAloudText="Lo lograste.">
-      <div className="mx-auto max-w-2xl space-y-6 p-8 text-center">
+      <div className="mx-auto max-w-2xl space-y-6 px-4 py-6 text-center sm:p-8">
         {/* El sello del eje, no una medalla: lo que se celebra es haber
             trabajado en «Detective de IA», no haber ganado un premio. */}
         <div className="seal-in flex justify-center">
@@ -516,12 +604,12 @@ export function ActivityPage() {
         {badges.map((b) => (
           <div
             key={b.name}
-            className="flex items-center gap-4 rounded-lg border-2 border-eje-b bg-eje-b-soft p-4 text-left"
+            className="flex items-center gap-3 rounded-lg border-2 border-eje-b bg-eje-b-soft p-4 text-left sm:gap-4"
           >
             <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white text-eje-b">
               <Icon name="award" size={26} />
             </span>
-            <div>
+            <div className="min-w-0">
               <p className="text-body-lg font-bold text-eje-b">Nuevo logro: {b.name}</p>
               <p className="text-body text-ink-2">{b.description}</p>
             </div>
@@ -583,10 +671,10 @@ export function ActivityPage() {
         </div>
 
         <div className="flex flex-wrap justify-center gap-3">
-          <Button axis={axis} variant="secondary" onClick={() => nav('/mapa')}>
+          <Button axis={axis} variant="secondary" full="mobile" onClick={() => nav('/mapa')}>
             Volver al mapa
           </Button>
-          <Button axis={axis} onClick={() => nav(`/eje/${activity.axisCode}`)}>
+          <Button axis={axis} full="mobile" onClick={() => nav(`/eje/${activity.axisCode}`)}>
             Siguiente actividad
           </Button>
         </div>

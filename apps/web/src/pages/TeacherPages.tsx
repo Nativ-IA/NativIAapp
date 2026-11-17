@@ -61,8 +61,8 @@ export function TeacherLoginPage() {
     'mt-1.5 min-h-touch w-full rounded-md border-2 border-line px-4 text-body transition-colors focus:border-brand';
 
   return (
-    <div className="flex min-h-screen flex-col bg-surf">
-      <main className="flex flex-1 items-center justify-center px-6 py-10">
+    <div className="flex screen pb-safe flex-col bg-surf">
+      <main className="flex flex-1 items-center justify-center px-4 py-8 sm:px-6 sm:py-10">
         <div className="w-full max-w-sm">
           <div className="flex flex-col items-center text-center">
             <Mark className="h-14 w-14 text-brand" />
@@ -74,7 +74,7 @@ export function TeacherLoginPage() {
 
           <form
             onSubmit={submit}
-            className="mt-8 rounded-lg border border-line bg-white px-6 py-7"
+            className="mt-8 rounded-lg border border-line bg-white px-4 py-6 sm:px-6 sm:py-7"
           >
             <h1 className="text-body-lg font-bold">Panel del Maestro</h1>
 
@@ -223,17 +223,17 @@ export function TeacherDashboardPage() {
             />
 
             {data.needHelpToday.length === 0 ? (
-              <div className="flex flex-wrap items-center gap-4 rounded-lg border border-line bg-white p-4">
-                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-eje-b-soft text-eje-b">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-3 rounded-lg border border-line bg-white p-4">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-eje-b-soft text-eje-b">
                   <Icon name="check" size={20} />
                 </span>
-                <div className="min-w-0 flex-1">
+                <div className="min-w-0 flex-1 basis-[11rem]">
                   <p className="text-body font-semibold">Nadie necesita apoyo urgente hoy</p>
                   <p className="text-small text-ink-2">
                     Revisa la vista de grupo para ver cómo va cada estudiante.
                   </p>
                 </div>
-                <Button variant="secondary" onClick={() => nav('/profe/grupo')}>
+                <Button variant="secondary" full="mobile" onClick={() => nav('/profe/grupo')}>
                   Ver el grupo
                 </Button>
               </div>
@@ -241,8 +241,12 @@ export function TeacherDashboardPage() {
               <ul className="overflow-hidden rounded-lg border border-line bg-white">
                 {data.needHelpToday.map((s) => (
                   <li key={s.studentProfileId} className="row">
-                    <Avatar avatarKey={s.avatarKey} size="sm" />
-                    <div className="min-w-0 flex-1">
+                    <span className="shrink-0">
+                      <Avatar avatarKey={s.avatarKey} size="sm" />
+                    </span>
+                    {/* `basis`: si «Ver ficha» no cabe al lado, baja a su fila;
+                        el motivo nunca se parte en una palabra por línea. */}
+                    <div className="min-w-0 flex-1 basis-[11rem]">
                       <p className="text-body font-bold">{s.firstName}</p>
                       <p className="text-small text-ink-2">{s.reason}</p>
                       {s.signalConfidence === 'baja' && (
@@ -254,6 +258,7 @@ export function TeacherDashboardPage() {
                     </div>
                     <Button
                       variant="secondary"
+                      full="mobile"
                       onClick={() => nav(`/profe/estudiante/${s.studentProfileId}`)}
                     >
                       Ver ficha
@@ -267,7 +272,7 @@ export function TeacherDashboardPage() {
           {/* Extremos, no promedio: el promedio no sugiere ninguna acción. */}
           <section>
             <SectionHead title="Tu grupo esta semana" />
-            <div className="space-y-5 rounded-lg border border-line bg-white p-5">
+            <div className="space-y-5 rounded-lg border border-line bg-white p-4 sm:p-5">
               {data.groupHighlights.best ? (
                 <>
                   <Highlight label="Lo que mejor va" data={data.groupHighlights.best} tone="ok" />
@@ -304,12 +309,12 @@ export function TeacherDashboardPage() {
                       key={a.id}
                       className={`rounded-lg border-l-4 border-y border-r border-line bg-white p-4 ${sv.border}`}
                     >
-                      <div className="flex items-start gap-3">
+                      <div className="flex flex-wrap items-start gap-x-3 gap-y-3">
                         <span
                           className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${sv.dot}`}
                           aria-hidden
                         />
-                        <div className="min-w-0 flex-1">
+                        <div className="min-w-0 flex-1 basis-[11rem]">
                           <p className="text-body font-semibold">{a.message}</p>
                           <p className="text-micro text-ink-3">Severidad {sv.word.toLowerCase()}</p>
                           {/* El contenido sensible no se muestra en el listado: la
@@ -321,7 +326,9 @@ export function TeacherDashboardPage() {
                             </p>
                           )}
                         </div>
-                        <Button variant="secondary">{a.suggestedAction.label ?? 'Revisar'}</Button>
+                        <Button variant="secondary" full="mobile">
+                          {a.suggestedAction.label ?? 'Revisar'}
+                        </Button>
                       </div>
                     </li>
                   );
@@ -331,14 +338,16 @@ export function TeacherDashboardPage() {
           </section>
 
           {data.moderationPending > 0 && (
-            <section className="flex flex-wrap items-center gap-4 rounded-lg border-2 border-alert bg-white p-4">
-              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-eje-d-soft text-alert">
+            <section className="flex flex-wrap items-center gap-x-4 gap-y-3 rounded-lg border-2 border-alert bg-white p-4">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-eje-d-soft text-alert">
                 <Icon name="shield" size={20} />
               </span>
-              <p className="min-w-0 flex-1 text-body font-semibold">
+              <p className="min-w-0 flex-1 basis-[11rem] text-body font-semibold">
                 {data.moderationPending} conversación(es) esperan tu revisión
               </p>
-              <Button variant="secondary">Revisar</Button>
+              <Button variant="secondary" full="mobile">
+                Revisar
+              </Button>
             </section>
           )}
         </div>

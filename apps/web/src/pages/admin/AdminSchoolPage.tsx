@@ -242,7 +242,7 @@ function NewClassroomForm({
   }
 
   return (
-    <form onSubmit={submit} className="mb-4 rounded-md border border-line bg-white p-5">
+    <form onSubmit={submit} className="mb-4 rounded-md border border-line bg-white p-4 sm:p-5">
       <p className="text-body font-bold">Nuevo curso</p>
       <div className="mt-3 grid gap-4 md:grid-cols-4">
         <Field label="Sede" htmlFor="class-campus">
@@ -521,7 +521,7 @@ function NewStaffForm({
   }
 
   return (
-    <form onSubmit={submit} className="mb-4 rounded-md border border-line bg-white p-5">
+    <form onSubmit={submit} className="mb-4 rounded-md border border-line bg-white p-4 sm:p-5">
       <p className="text-body font-bold">Nueva cuenta</p>
       <div className="mt-3 grid gap-4 md:grid-cols-2">
         <Field label="Nombres" htmlFor="staff-first">

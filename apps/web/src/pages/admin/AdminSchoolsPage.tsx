@@ -81,10 +81,12 @@ export function AdminSchoolsPage() {
                 <tbody>
                   {data.schools.map((s) => (
                     <tr key={s.id} className="hover:bg-surf">
-                      <td className={td}>
+                      <td className={`${td} min-w-[11rem]`}>
+                        {/* El relleno vertical agranda el área de toque del
+                            enlace sin mover la fila. */}
                         <Link
                           to={`/admin/colegios/${s.id}`}
-                          className="font-semibold text-brand underline-offset-2 hover:underline"
+                          className="-my-2.5 inline-block py-2.5 font-semibold text-brand underline-offset-2 hover:underline"
                         >
                           {s.name}
                         </Link>
@@ -145,7 +147,7 @@ function NewSchoolForm({ onCancel }: { onCancel: () => void }) {
   }
 
   return (
-    <form onSubmit={submit} className="mb-4 rounded-md border border-line bg-white p-5">
+    <form onSubmit={submit} className="mb-4 rounded-md border border-line bg-white p-4 sm:p-5">
       <p className="text-body font-bold">Nuevo colegio</p>
       <div className="mt-3 grid gap-4 md:grid-cols-2">
         <Field label="Nombre" htmlFor="school-name">

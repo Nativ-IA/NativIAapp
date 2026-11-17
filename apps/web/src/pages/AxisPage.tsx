@@ -41,11 +41,13 @@ export function AxisPage() {
 
   return (
     <StudentShell back="/mapa" readAloudText={`${AXIS_NAME[code]}. ${AXIS_TAGLINE[code]}`}>
-      <div className="mx-auto max-w-3xl px-6 py-8">
+      <div className="mx-auto max-w-3xl px-4 py-5 sm:px-6 sm:py-8">
         {/* La pantalla venía sin ninguna identidad de eje: se entraba a
             «Detective de IA» y no había nada que dijera dónde estabas. */}
-        <header className="flex items-start gap-4">
-          <Emblem axis={code} size={64} />
+        <header className="flex items-start gap-3 sm:gap-4">
+          <span className="shrink-0">
+            <Emblem axis={code} size={64} />
+          </span>
           <div className="min-w-0 flex-1">
             <h1 className={`text-h1 font-bold ${AXIS_TEXT[code]}`}>{AXIS_NAME[code]}</h1>
             <p className="mt-1 text-body text-ink-2">{AXIS_TAGLINE[code]}</p>
@@ -57,7 +59,7 @@ export function AxisPage() {
           )}
         </header>
 
-        <div className="mt-8 space-y-3">
+        <div className="mt-6 space-y-3 sm:mt-8">
           {error && <ErrorState message={error} onRetry={() => location.reload()} />}
 
           {!items && !error &&
@@ -77,19 +79,23 @@ export function AxisPage() {
             return (
               <article
                 key={a.id}
-                className={`flex flex-wrap items-center gap-4 rounded-lg border border-line p-4 ${
+                // El texto pide un ancho mínimo (`basis`): si el botón no cabe
+                // a su lado, baja a su propia fila a todo lo ancho. Antes, en
+                // celular, el botón se quedaba y el título se partía en una
+                // palabra por línea.
+                className={`flex flex-wrap items-center gap-x-4 gap-y-3 rounded-lg border border-line p-4 ${
                   a.status === 'bloqueada' ? 'bg-surf' : 'bg-white'
                 }`}
               >
                 <span
-                  className={`flex h-11 w-11 items-center justify-center rounded-full ${st.ring}`}
+                  className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${st.ring}`}
                   role="img"
                   aria-label={st.label}
                 >
                   <Icon name={st.icon} size={20} />
                 </span>
 
-                <div className="min-w-0 flex-1">
+                <div className="min-w-0 flex-1 basis-[11rem]">
                   <h2
                     className={`text-body-lg font-bold ${
                       a.status === 'bloqueada' ? 'text-ink-2' : ''
@@ -125,17 +131,17 @@ export function AxisPage() {
                 </div>
 
                 {a.status === 'disponible' && (
-                  <Button axis={AXIS_BUTTON[code]} onClick={() => nav(`/actividad/${a.id}`)}>
+                  <Button axis={AXIS_BUTTON[code]} full="mobile" onClick={() => nav(`/actividad/${a.id}`)}>
                     Empezar
                   </Button>
                 )}
                 {a.status === 'completada' && (
-                  <Button variant="secondary" onClick={() => nav(`/actividad/${a.id}`)}>
+                  <Button variant="secondary" full="mobile" onClick={() => nav(`/actividad/${a.id}`)}>
                     Repetir
                   </Button>
                 )}
                 {a.status === 'bloqueada' && (
-                  <p className="max-w-[13rem] text-small text-ink-3">
+                  <p className="w-full text-small text-ink-3 sm:w-auto sm:max-w-[13rem]">
                     Se abre cuando termines la anterior
                   </p>
                 )}

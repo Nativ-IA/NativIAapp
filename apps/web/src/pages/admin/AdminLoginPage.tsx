@@ -44,8 +44,8 @@ export function AdminLoginPage() {
     'mt-1.5 min-h-touch w-full rounded-md border-2 border-line px-4 text-body transition-colors focus:border-brand';
 
   return (
-    <div className="flex min-h-screen flex-col bg-surf">
-      <main className="flex flex-1 items-center justify-center px-6 py-10">
+    <div className="flex screen pb-safe flex-col bg-surf">
+      <main className="flex flex-1 items-center justify-center px-4 py-8 sm:px-6 sm:py-10">
         <div className="w-full max-w-sm">
           <div className="flex flex-col items-center text-center">
             <Mark className="h-14 w-14 text-brand" />
@@ -55,7 +55,7 @@ export function AdminLoginPage() {
             <p className="mt-1 text-small text-ink-2">Panel del equipo de plataforma</p>
           </div>
 
-          <form onSubmit={submit} className="mt-8 rounded-lg border border-line bg-white px-6 py-7">
+          <form onSubmit={submit} className="mt-8 rounded-lg border border-line bg-white px-4 py-6 sm:px-6 sm:py-7">
             <h1 className="text-body-lg font-bold">Administración</h1>
 
             <div className="mt-5">

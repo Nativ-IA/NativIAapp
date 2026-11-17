@@ -51,7 +51,10 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   /** Un botón deshabilitado SIEMPRE explica por qué: un botón gris sin
    *  explicación es un callejón sin salida para un niño. */
   disabledReason?: string;
-  full?: boolean;
+  /** `true`: ocupa todo el ancho. `'mobile'`: todo el ancho solo en celular,
+   *  donde un botón a medio ancho junto a un texto deja a los dos apretados;
+   *  desde tableta vuelve a su ancho natural. */
+  full?: boolean | 'mobile';
 }
 
 /** Reenvía la ref al `<button>` real: hay diálogos que necesitan poner el foco
@@ -80,18 +83,25 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
 
   const styles: Record<Variant, string> = {
     primary: `${axisBg} text-white font-bold hover:brightness-110 active:brightness-95`,
-    secondary: 'border-2 border-line bg-white text-ink font-semibold hover:border-ink-3 hover:bg-surf',
-    ghost: 'text-ink-2 font-semibold hover:bg-surf',
+    secondary:
+      'border-2 border-line bg-white text-ink font-semibold hover:border-ink-3 hover:bg-surf active:bg-surf',
+    ghost: 'text-ink-2 font-semibold hover:bg-surf active:bg-surf',
   };
 
+  const wrap = full === 'mobile' ? 'w-full sm:inline-block sm:w-auto' : full ? 'w-full' : 'inline-block';
+  const width = full === 'mobile' ? 'w-full sm:w-auto' : full ? 'w-full' : '';
+
   return (
-    <div className={full ? 'w-full' : 'inline-block'}>
+    <div className={wrap}>
+      {/* En celular el relleno lateral baja de 32 a 20 px y el texto puede
+          partirse en dos líneas: «Listo, ¿qué dijo la máquina?» no cabe en una
+          a 360 px de ancho y antes empujaba el botón fuera de la tarjeta. */}
       <button
         {...props}
         ref={ref}
-        className={`min-h-touch-lg rounded-md px-8 text-body-lg transition-[filter,background-color,border-color] duration-150
+        className={`min-h-touch-lg rounded-md px-5 py-2 text-body-lg transition-[filter,background-color,border-color] duration-150 sm:px-8
           disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:brightness-100
-          ${styles[variant]} ${full ? 'w-full' : ''} ${className}`}
+          ${styles[variant]} ${width} ${className}`}
       >
         {children}
       </button>
@@ -145,7 +155,15 @@ export function ProgressBar({ value, total }: { value: number; total: number }) 
 // Probablemente la función de accesibilidad de mayor impacto real: buena parte
 // del grupo objetivo lee con dificultad. Sin costo y sin conexión.
 
-export function ReadAloudButton({ text }: { text: string }) {
+export function ReadAloudButton({
+  text,
+  compact,
+}: {
+  text: string;
+  /** En la barra superior: solo el icono hasta pantallas anchas. El botón
+   *  conserva su `aria-label`, así que el lector de pantalla lo anuncia igual. */
+  compact?: boolean;
+}) {
   const [speaking, setSpeaking] = useState(false);
   const supported = typeof window !== 'undefined' && 'speechSynthesis' in window;
 
@@ -169,13 +187,13 @@ export function ReadAloudButton({ text }: { text: string }) {
   return (
     <button
       onClick={toggle}
-      className={`flex min-h-touch min-w-touch items-center gap-2 rounded-sm px-3 text-small font-semibold transition-colors hover:bg-surf ${
+      className={`flex min-h-touch min-w-touch shrink-0 items-center justify-center gap-2 rounded-sm px-3 text-small font-semibold transition-colors hover:bg-surf ${
         speaking ? 'text-brand' : 'text-ink-2'
       }`}
       aria-label={speaking ? 'Detener la lectura' : 'Escuchar esta pantalla'}
     >
       <Icon name={speaking ? 'volume-off' : 'volume'} size={20} />
-      <span>{speaking ? 'Detener' : 'Escuchar'}</span>
+      <span className={compact ? 'hidden lg:inline' : ''}>{speaking ? 'Detener' : 'Escuchar'}</span>
     </button>
   );
 }
@@ -183,7 +201,13 @@ export function ReadAloudButton({ text }: { text: string }) {
 // ── Botón «Preguntar al profe» ───────────────────────────────────────────────
 // Escapatoria a un adulto real, visible en toda pantalla del estudiante (E-08).
 
-export function AskTeacherButton({ onAsk }: { onAsk?: () => void }) {
+export function AskTeacherButton({
+  onAsk,
+  className = '',
+}: {
+  onAsk?: () => void;
+  className?: string;
+}) {
   const [sent, setSent] = useState(false);
   return (
     <button
@@ -191,9 +215,9 @@ export function AskTeacherButton({ onAsk }: { onAsk?: () => void }) {
         onAsk?.();
         setSent(true);
       }}
-      className={`flex min-h-touch items-center gap-2 rounded-sm px-3 text-small font-semibold transition-colors hover:bg-surf ${
+      className={`flex min-h-touch shrink-0 items-center gap-2 whitespace-nowrap rounded-sm px-3 text-small font-semibold transition-colors hover:bg-surf ${
         sent ? 'text-ok' : 'text-ink-2'
-      }`}
+      } ${className}`}
     >
       <Icon name={sent ? 'check' : 'hand'} size={20} />
       <span>{sent ? 'Tu profe ya sabe' : 'Preguntar al profe'}</span>
@@ -215,7 +239,7 @@ export function EmptyState({
   hint?: string;
 }) {
   return (
-    <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-line px-6 py-12 text-center">
+    <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-line px-4 py-10 text-center sm:px-6 sm:py-12">
       <span className="flex h-14 w-14 items-center justify-center rounded-full bg-surf text-ink-3">
         <Icon name={icon} size={26} />
       </span>
@@ -229,7 +253,7 @@ export function EmptyState({
  *  afirman que su progreso está a salvo: es el temor real a esa edad. */
 export function ErrorState({ message, onRetry }: { message: string; onRetry?: () => void }) {
   return (
-    <div className="mx-auto flex max-w-md flex-col items-center gap-4 px-6 py-12 text-center">
+    <div className="mx-auto flex max-w-md flex-col items-center gap-4 px-4 py-12 text-center sm:px-6">
       <span className="flex h-14 w-14 items-center justify-center rounded-full bg-eje-c-soft text-eje-c">
         <Icon name="alert" size={26} />
       </span>

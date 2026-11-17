@@ -29,7 +29,7 @@ export function MetacognitionPrompt({
   const canSubmit = text.trim().length > 0 || tags.length > 0;
 
   return (
-    <section className="mx-auto max-w-2xl space-y-6 py-8 text-center">
+    <section className="mx-auto max-w-2xl space-y-6 px-4 py-6 text-center sm:px-6 sm:py-8">
       {/* Es Nati quien pregunta, y por eso lleva su marca. El antetítulo en
           versalitas que había aquí («ANTES DE TERMINAR…») no decía nada que la
           pregunta no dijera ya. */}
@@ -65,7 +65,7 @@ export function MetacognitionPrompt({
                 onClick={() =>
                   setTags((t) => (active ? t.filter((x) => x !== s) : [...t, s]))
                 }
-                className={`min-h-touch rounded-full border-2 px-4 text-body transition-colors ${
+                className={`min-h-touch rounded-full border-2 px-4 py-1.5 text-body transition-colors ${
                   active
                     ? 'border-brand bg-brand font-semibold text-white'
                     : 'border-line text-ink-2 hover:bg-surf'

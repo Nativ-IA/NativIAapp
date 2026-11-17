@@ -41,7 +41,7 @@ export function TransparencyPage() {
 
   return (
     <StudentShell back="/mapa" title="¿Qué sabe NativIA de mí?" readAloudText={speech}>
-      <div className="mx-auto max-w-2xl px-6 py-8">
+      <div className="mx-auto max-w-2xl px-4 py-5 sm:px-6 sm:py-8">
         {!data && <Skeleton className="h-64" />}
 
         {data && (
@@ -54,7 +54,7 @@ export function TransparencyPage() {
               <ul className="overflow-hidden rounded-lg border border-line">
                 {data.stored.map((s) => (
                   <li key={s.what} className="row bg-white">
-                    <span className="flex h-10 w-10 items-center justify-center rounded-full bg-eje-b-soft text-eje-b">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-eje-b-soft text-eje-b">
                       <Icon name={ICONS[s.icon] ?? 'check'} size={20} />
                     </span>
                     <div className="min-w-0 flex-1">
@@ -84,7 +84,7 @@ export function TransparencyPage() {
               </ul>
             </section>
 
-            <section className="rounded-lg border-2 border-info bg-eje-a-soft p-5">
+            <section className="rounded-lg border-2 border-info bg-eje-a-soft p-4 sm:p-5">
               <h2 className="mb-2 flex items-center gap-2 text-body-lg font-bold text-eje-a">
                 <Icon name="eye" size={22} />
                 Quién puede ver

@@ -113,7 +113,11 @@ export async function buildServer() {
 if (process.env.NODE_ENV !== 'test') {
   const app = await buildServer();
   try {
-    await app.listen({ port: config.PORT, host: '0.0.0.0' });
+    // Por defecto escucha en todas las interfaces (lo que necesita Cloud Run y
+    // lo que permite entrar desde otro equipo de la red). `pnpm demo:movil`
+    // pone HOST=127.0.0.1: detrás del túnel público no hace falta abrir el
+    // puerto a la red, y así Windows no pide permiso de firewall.
+    await app.listen({ port: config.PORT, host: process.env.HOST || '0.0.0.0' });
     console.log(`\n  API de NativIA en http://localhost:${config.PORT}/v1`);
     console.log(`  Tutor: ${llmMode === 'mock' ? 'modo demostración' : config.TUTOR_MODEL}\n`);
   } catch (err) {

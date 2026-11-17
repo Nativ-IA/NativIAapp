@@ -59,7 +59,7 @@ export function ComparisonActivity({
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6 p-6">
+    <div className="mx-auto max-w-2xl space-y-6 px-4 py-5 sm:p-6">
       <div className="flex items-center justify-between">
         <ProgressDots completed={index} total={payload.rounds.length} />
         <ReadAloudButton text={`${round.prompt}. ${round.question}`} />
@@ -67,7 +67,7 @@ export function ComparisonActivity({
 
       <p className="text-body text-ink-2">{payload.intro}</p>
 
-      <section className="rounded-md border-2 border-line p-5">
+      <section className="rounded-md border-2 border-line p-4 sm:p-5">
         <p className="text-body-lg font-semibold">{round.prompt}</p>
 
         {phase === 'prediccion' && (
@@ -80,6 +80,8 @@ export function ComparisonActivity({
               value={myGuess}
               onChange={(e) => setMyGuess(e.target.value)}
               maxLength={40}
+              autoComplete="off"
+              enterKeyHint="done"
               className="min-h-touch-lg w-full rounded-md border-2 border-line px-4 text-body-lg focus:border-eje-a"
               placeholder="Tu respuesta…"
             />
@@ -125,7 +127,7 @@ export function ComparisonActivity({
                 if (o.isCorrect) setCorrect((c) => c + 1);
                 setPhase('explicacion');
               }}
-              className="min-h-touch-lg w-full rounded-md border-2 border-line px-5 py-3 text-left text-body hover:border-eje-a hover:bg-eje-a-soft"
+              className="min-h-touch-lg w-full rounded-md border-2 border-line px-4 py-3 text-left text-body hover:border-eje-a hover:bg-eje-a-soft active:border-eje-a active:bg-eje-a-soft sm:px-5"
             >
               {o.label}
             </button>
@@ -136,7 +138,7 @@ export function ComparisonActivity({
       {phase === 'explicacion' && (
         <section className="space-y-4">
           <div
-            className={`rounded-md border-2 p-5 ${
+            className={`rounded-md border-2 p-4 sm:p-5 ${
               option?.isCorrect ? 'border-ok bg-eje-b-soft' : 'border-warn bg-eje-c-soft'
             }`}
           >

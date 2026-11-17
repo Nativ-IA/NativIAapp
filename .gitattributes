@@ -1,0 +1,4 @@
+# Los .cmd de Windows con fin de línea LF fallan en algunos casos (etiquetas,
+# GOTO): se guardan siempre con CRLF, sin importar la configuración de quien
+# haga checkout.
+*.cmd text eol=crlf

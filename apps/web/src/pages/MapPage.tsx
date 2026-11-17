@@ -44,11 +44,11 @@ export function MapPage() {
           ejes se vean SIN SCROLL — el niño ve el todo y elige, en vez de
           recorrer un camino lineal. En una pantalla de portátil escolar eso
           deja poco margen, así que el encabezado va en una sola línea. */}
-      <div className="mx-auto max-w-4xl px-6 py-5">
+      <div className="mx-auto max-w-4xl px-4 py-4 sm:px-6 sm:py-5">
         {data && (
           <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
             <h1 className="text-h1 font-bold">Tu mapa</h1>
-            <div className="flex items-center gap-5">
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
               <p className="text-body">
                 <span className="font-bold">{totalDone}</span>
                 <span className="text-ink-2"> de {totalAll} hechas</span>
@@ -88,8 +88,10 @@ export function MapPage() {
                   className="seal-in flex flex-col rounded-lg border border-line bg-white p-4"
                   style={{ animationDelay: `${i * 70}ms` }}
                 >
-                  <div className="flex items-start gap-4">
-                    <Emblem axis={code} size={64} />
+                  <div className="flex items-start gap-3 sm:gap-4">
+                    <span className="shrink-0">
+                      <Emblem axis={code} size={64} />
+                    </span>
                     <div className="min-w-0 flex-1">
                       <h2 className={`text-h2 font-bold ${st.text}`}>{axis.displayName}</h2>
                       <p className="mt-1 text-small text-ink-2">{axis.tagline}</p>

@@ -13,7 +13,7 @@ export default defineConfig({
       //
       // Los binarios de /public no cambian durante el desarrollo, así que no
       // hay nada que vigilar en ellos y sí mucho que perder.
-      ignored: ['**/public/fonts/**'],
+      ignored: ['**/public/fonts/**', '**/public/icons/**'],
     },
   },
 });

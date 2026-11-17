@@ -2,9 +2,29 @@
 <html lang="es-CO">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!-- viewport-fit=cover: la app pinta hasta los bordes y respeta la muesca y
+         la barra de inicio con env(safe-area-inset-*) (ver index.css).
+         interactive-widget=resizes-content: en Android el teclado encoge la
+         página en vez de taparla; el campo del chat queda siempre a la vista.
+         Safari lo ignora y hace su propio ajuste. -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content"
+    />
     <meta name="theme-color" content="#007895" />
     <meta name="description" content="NativIA — nativos de la IA, dueños de sus preguntas." />
+    <!-- Los códigos de curso y las cifras no son teléfonos: iOS los volvía enlaces. -->
+    <meta name="format-detection" content="telephone=no" />
+
+    <!-- «Agregar a la pantalla de inicio» en Android y iOS: abre sin la barra
+         del navegador, con el icono y el nombre de NativIA. -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="NativIA" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>NativIA</title>
   </head>

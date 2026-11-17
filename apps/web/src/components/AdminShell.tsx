@@ -25,9 +25,9 @@ export function AdminShell({ children }: { children: ReactNode }) {
   ];
 
   return (
-    <div className="flex min-h-screen flex-col bg-surf">
+    <div className="flex screen pb-safe flex-col bg-surf">
       <header className="border-b border-line bg-white">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-3 gap-y-2 px-6 py-3">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-2 gap-y-1 px-4 py-1.5 sm:gap-x-3 sm:px-6 sm:py-3">
           <Mark className="h-7 w-7 shrink-0 text-brand" />
           <p className="text-body font-bold">
             Nativ<span className="text-brand">IA</span>
@@ -35,7 +35,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
           <span aria-hidden className="text-line">
             |
           </span>
-          <p className="text-body font-semibold text-ink-2">Plataforma</p>
+          <p className="min-w-0 truncate text-body font-semibold text-ink-2">Plataforma</p>
 
           <div className="flex-1" />
 
@@ -50,20 +50,20 @@ export function AdminShell({ children }: { children: ReactNode }) {
               localStorage.removeItem('nativia.admin');
               nav('/admin/entrar');
             }}
-            className="flex min-h-touch items-center gap-2 rounded-sm px-3 text-small font-semibold text-ink-2 hover:bg-surf"
+            className="flex min-h-touch min-w-touch shrink-0 items-center justify-center gap-2 rounded-sm px-3 text-small font-semibold text-ink-2 hover:bg-surf"
           >
             <Icon name="log-out" size={18} />
-            Salir
+            <span className="max-[359px]:sr-only">Salir</span>
           </button>
         </div>
 
-        <nav className="mx-auto flex max-w-6xl gap-1 overflow-x-auto px-6">
+        <nav className="mx-auto flex max-w-6xl gap-1 overflow-x-auto px-2 sm:px-6">
           {tabs.map((t) => (
             <NavLink
               key={t.to}
               to={t.to}
               aria-current={t.active ? 'page' : undefined}
-              className={`-mb-px shrink-0 border-b-2 px-4 py-2.5 text-small font-semibold transition-colors ${
+              className={`-mb-px flex min-h-touch shrink-0 items-center border-b-2 px-3 text-small font-semibold transition-colors sm:px-4 ${
                 t.active ? 'border-brand text-brand' : 'border-transparent text-ink-2 hover:text-ink'
               }`}
             >
@@ -73,10 +73,10 @@ export function AdminShell({ children }: { children: ReactNode }) {
         </nav>
       </header>
 
-      <main className="mx-auto w-full max-w-6xl flex-1 px-6 py-6">{children}</main>
+      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-5 sm:px-6 sm:py-6">{children}</main>
 
-      <footer className="mx-auto flex w-full max-w-6xl items-center gap-2 px-6 pb-6 text-micro text-ink-3">
-        <Icon name="shield" size={16} />
+      <footer className="mx-auto flex w-full max-w-6xl items-start gap-2 px-4 pb-6 text-micro text-ink-3 sm:items-center sm:px-6">
+        <Icon name="shield" size={16} className="mt-0.5 shrink-0 sm:mt-0" />
         Este panel no muestra nombres ni trabajo de los estudiantes, solo cifras. Cada cambio queda
         en la auditoría.
       </footer>

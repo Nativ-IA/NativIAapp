@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { lazy, Suspense } from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import './index.css';
@@ -20,14 +20,20 @@ import { AdminAuditPage } from './pages/admin/AdminAuditPage';
 import { StudentShell } from './components/AppShell';
 import { EmptyState } from './components/ui';
 
+// La página del QR trae su propio generador de códigos: se descarga solo
+// cuando alguien la abre, no con la portada que ve cada estudiante.
+const QrPage = lazy(() => import('./pages/QrPage').then((m) => ({ default: m.QrPage })));
+
 function Logros() {
   return (
     <StudentShell back="/mapa" title="Mis logros">
-      <EmptyState
-        icon="award"
-        title="Tus logros aparecerán aquí"
-        hint="Se ganan por cómo piensas, no por cuántos ejercicios haces."
-      />
+      <div className="mx-auto max-w-2xl px-4 py-5 sm:px-6 sm:py-8">
+        <EmptyState
+          icon="award"
+          title="Tus logros aparecerán aquí"
+          hint="Se ganan por cómo piensas, no por cuántos ejercicios haces."
+        />
+      </div>
     </StudentShell>
   );
 }
@@ -57,6 +63,16 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         <Route path="/admin/colegios/:schoolId" element={<AdminSchoolPage />} />
         <Route path="/admin/consumo" element={<AdminUsagePage />} />
         <Route path="/admin/auditoria" element={<AdminAuditPage />} />
+
+        {/* Código QR para abrir la app desde otro dispositivo */}
+        <Route
+          path="/qr"
+          element={
+            <Suspense fallback={null}>
+              <QrPage />
+            </Suspense>
+          }
+        />
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

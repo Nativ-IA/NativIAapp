@@ -84,25 +84,31 @@ export function NatiLauncher() {
 
   return (
     <>
-      {/* Botón fijo: la carita de Nati. */}
+      {/* Botón fijo: la carita de Nati. Queda encima de la barra inferior y se
+          aparta de la barra de inicio del iPhone y de los gestos de Android. */}
       <button
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
         aria-controls="nati-panel"
         aria-label={open ? 'Cerrar a Nati' : 'Hablar con Nati'}
-        className="fixed bottom-20 right-4 z-40 flex h-16 w-16 items-center justify-center rounded-full border-2 border-brand bg-white shadow-lg transition-transform hover:scale-105"
+        className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-[calc(1rem+env(safe-area-inset-right))] z-40 flex h-16 w-16 items-center justify-center rounded-full border-2 border-brand bg-white shadow-lg transition-transform hover:scale-105 active:scale-95"
       >
         <NatiMark size={44} />
       </button>
 
+      {/* En celular el panel ocupa la pantalla entera: como ventana flotante
+          quedaba de unos 300 px de alto y, con el teclado abierto, no se veía
+          lo que Nati respondía. Desde tableta vuelve a ser la ventana sobre
+          el botón. `dvh` y no `vh`: en el celular `100vh` incluye la barra de
+          direcciones y el panel se salía por arriba. */}
       {open && (
         <section
           id="nati-panel"
           role="dialog"
           aria-label="Conversación con Nati"
-          className="fixed bottom-40 right-4 z-40 flex h-[min(32rem,calc(100vh-12rem))] w-[min(24rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-lg border-2 border-brand bg-white shadow-xl"
+          className="fixed inset-0 z-50 flex flex-col overflow-hidden bg-white pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] pt-[env(safe-area-inset-top)] sm:inset-auto sm:bottom-40 sm:right-4 sm:z-40 sm:h-[min(32rem,calc(100dvh-12rem))] sm:w-[min(24rem,calc(100vw-2rem))] sm:rounded-lg sm:border-2 sm:border-brand sm:p-0 sm:shadow-xl"
         >
-          <header className="flex items-center gap-2 border-b border-line bg-brand-soft px-4 py-2.5">
+          <header className="flex shrink-0 items-center gap-2 border-b border-line bg-brand-soft px-4 py-2.5">
             <NatiMark size={28} />
             <div className="min-w-0 flex-1">
               <p className="text-body font-bold">Nati</p>
@@ -123,7 +129,11 @@ export function NatiLauncher() {
             </button>
           </header>
 
-          <div className="flex-1 space-y-3 overflow-y-auto p-3" role="log" aria-live="polite">
+          <div
+            className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-3"
+            role="log"
+            aria-live="polite"
+          >
             {messages.map((m, i) => (
               <div key={i} className={`flex gap-2 ${m.role === 'user' ? 'flex-row-reverse' : ''}`}>
                 <div className="shrink-0">
@@ -134,7 +144,7 @@ export function NatiLauncher() {
                   )}
                 </div>
                 <p
-                  className={`max-w-[85%] whitespace-pre-line px-3 py-2 text-body ${
+                  className={`min-w-0 max-w-[85%] whitespace-pre-line break-words px-3 py-2 text-body ${
                     m.role === 'assistant'
                       ? 'rounded-lg rounded-tl-sm bg-brand-soft'
                       : 'rounded-lg rounded-tr-sm bg-surf'
@@ -157,7 +167,7 @@ export function NatiLauncher() {
             <div ref={endRef} />
           </div>
 
-          <div className="space-y-2 border-t border-line p-3">
+          <div className="shrink-0 space-y-2 border-t border-line p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:pb-3">
             {cfg && messages.length <= 2 && (
               <div className="flex flex-wrap gap-1.5">
                 {cfg.suggestedQuestions.map((q) => (
@@ -165,7 +175,7 @@ export function NatiLauncher() {
                     key={q}
                     onClick={() => send(q)}
                     disabled={thinking}
-                    className="min-h-touch rounded-md border-2 border-brand px-3 text-small font-semibold text-brand hover:bg-brand-soft disabled:opacity-50"
+                    className="min-h-touch rounded-md border-2 border-brand px-3 py-1 text-left text-small font-semibold text-brand hover:bg-brand-soft active:bg-brand-soft disabled:opacity-50"
                   >
                     {q}
                   </button>
@@ -189,13 +199,15 @@ export function NatiLauncher() {
                 maxLength={300}
                 placeholder="Pregúntale a Nati…"
                 disabled={thinking}
-                className="min-h-touch flex-1 rounded-md border-2 border-line px-3 text-body focus:border-brand"
+                autoComplete="off"
+                enterKeyHint="send"
+                className="min-h-touch min-w-0 flex-1 rounded-md border-2 border-line px-3 text-body focus:border-brand"
               />
               <button
                 type="submit"
                 disabled={thinking || draft.trim().length === 0}
                 aria-label="Enviar"
-                className="flex min-h-touch min-w-touch items-center justify-center rounded-md bg-brand px-4 text-white disabled:opacity-50"
+                className="flex min-h-touch min-w-touch shrink-0 items-center justify-center rounded-md bg-brand px-4 text-white disabled:opacity-50"
               >
                 <Icon name="send" size={20} />
               </button>

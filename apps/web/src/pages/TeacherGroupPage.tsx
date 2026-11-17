@@ -167,14 +167,16 @@ function Legend() {
 
 function GridView({ data, onOpen }: { data: Heatmap; onOpen: (id: string) => void }) {
   return (
-    <div className="overflow-x-auto rounded-lg border border-line bg-white">
+    // `relative` contiene a los `sr-only` de las celdas (posición absoluta):
+    // sin él se salen del área con scroll y estiran la página a lo ancho.
+    <div className="relative overflow-x-auto rounded-lg border border-line bg-white">
       <table className="w-full border-separate border-spacing-0">
         <caption className="sr-only">
           Nivel de cada estudiante por eje. Las columnas van siempre en el orden A, B, C, D.
         </caption>
         <thead>
           <tr>
-            <th scope="col" className="sticky left-0 z-10 bg-white px-4 py-2 text-left">
+            <th scope="col" className="sticky left-0 z-10 bg-white px-3 py-2 text-left sm:px-4">
               <span className="text-micro font-semibold text-ink-2">Estudiante</span>
             </th>
             {data.columns.map((c) => (
@@ -192,7 +194,7 @@ function GridView({ data, onOpen }: { data: Heatmap; onOpen: (id: string) => voi
             <tr key={r.studentProfileId} className="group">
               <th
                 scope="row"
-                className="sticky left-0 z-10 border-t border-line bg-white px-4 py-2 text-left font-normal"
+                className="sticky left-0 z-10 border-t border-line bg-white px-3 py-2 text-left font-normal sm:px-4"
               >
                 <span className="flex items-center gap-2.5">
                   <Avatar avatarKey={r.avatarKey} size="sm" />
@@ -220,10 +222,10 @@ function GridView({ data, onOpen }: { data: Heatmap; onOpen: (id: string) => voi
                 );
               })}
 
-              <td className="border-t border-line px-3 py-1 text-right">
+              <td className="border-t border-line px-2 py-1 text-right sm:px-3">
                 <button
                   onClick={() => onOpen(r.studentProfileId)}
-                  className="min-h-touch rounded-sm px-2 text-small font-semibold text-brand hover:bg-surf"
+                  className="min-h-touch whitespace-nowrap rounded-sm px-2 text-small font-semibold text-brand hover:bg-surf"
                 >
                   Ver ficha
                 </button>
@@ -240,8 +242,8 @@ function GridView({ data, onOpen }: { data: Heatmap; onOpen: (id: string) => voi
  *  funciona con lector de pantalla sin depender de ningún color. */
 function TableView({ data, onOpen }: { data: Heatmap; onOpen: (id: string) => void }) {
   return (
-    <div className="overflow-x-auto rounded-lg border border-line bg-white">
-      <table className="w-full text-left text-small">
+    <div className="relative overflow-x-auto rounded-lg border border-line bg-white">
+      <table className="w-full min-w-[560px] text-left text-small">
         <thead>
           <tr className="border-b border-line">
             <th scope="col" className="px-4 py-2.5 font-semibold text-ink-2">
@@ -275,7 +277,7 @@ function TableView({ data, onOpen }: { data: Heatmap; onOpen: (id: string) => vo
               <td className="px-4 py-2.5 text-right">
                 <button
                   onClick={() => onOpen(r.studentProfileId)}
-                  className="min-h-touch rounded-sm px-2 font-semibold text-brand hover:bg-surf"
+                  className="min-h-touch whitespace-nowrap rounded-sm px-2 font-semibold text-brand hover:bg-surf"
                 >
                   Ver ficha
                 </button>

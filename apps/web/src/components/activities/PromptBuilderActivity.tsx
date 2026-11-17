@@ -59,8 +59,8 @@ function Choice({
     <button
       onClick={onClick}
       aria-pressed={active}
-      className={`min-h-touch-lg w-full rounded-md border-2 px-5 py-3 text-left text-body transition-colors ${
-        active ? 'border-eje-b bg-eje-b-soft font-semibold' : 'border-line hover:border-eje-b'
+      className={`min-h-touch-lg w-full rounded-md border-2 px-4 py-3 text-left text-body transition-colors sm:px-5 ${
+        active ? 'border-eje-b bg-eje-b-soft font-semibold' : 'border-line hover:border-eje-b active:bg-eje-b-soft'
       }`}
     >
       {children}
@@ -93,7 +93,7 @@ export function PromptBuilderActivity({
   const stepIndex = { que: 0, armar: 1, comparar: 2, revisar: 3, cierre: 3 }[phase];
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6 p-6">
+    <div className="mx-auto max-w-2xl space-y-6 px-4 py-5 sm:p-6">
       {/* La receta, siempre a la vista: es lo que se aprende. */}
       <ol className="flex flex-wrap gap-2" aria-label="La receta de la buena pregunta">
         {STEP.map((s, i) => (
@@ -112,7 +112,7 @@ export function PromptBuilderActivity({
       {phase === 'que' && (
         <section className="space-y-4">
           <div className="flex items-start justify-between gap-3">
-            <p className="text-body-lg">{payload.intro}</p>
+            <p className="min-w-0 text-body-lg">{payload.intro}</p>
             <ReadAloudButton text={payload.intro} />
           </div>
           <h2 className="text-h2 font-bold">1. ¿Qué quieres pedirle a la IA?</h2>
@@ -212,7 +212,7 @@ export function PromptBuilderActivity({
 
       {phase === 'cierre' && checkQ && (
         <section className="space-y-4">
-          <div className="rounded-md border-2 border-eje-b bg-eje-b-soft p-5">
+          <div className="rounded-md border-2 border-eje-b bg-eje-b-soft p-4 sm:p-5">
             <p className="text-body-lg">{payload.closing}</p>
           </div>
           <Button

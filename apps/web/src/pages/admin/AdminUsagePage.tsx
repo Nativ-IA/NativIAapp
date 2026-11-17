@@ -69,10 +69,10 @@ export function AdminUsagePage() {
               <tbody>
                 {rows.map((s) => (
                   <tr key={s.id} className="hover:bg-surf">
-                    <td className={td}>
+                    <td className={`${td} min-w-[11rem]`}>
                       <Link
                         to={`/admin/colegios/${s.id}`}
-                        className="font-semibold text-brand underline-offset-2 hover:underline"
+                        className="-my-2.5 inline-block py-2.5 font-semibold text-brand underline-offset-2 hover:underline"
                       >
                         {s.name}
                       </Link>

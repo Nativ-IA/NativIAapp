@@ -95,8 +95,8 @@ export function PromptWorkshopActivity({
 
   if (done) {
     return (
-      <div className="mx-auto max-w-2xl space-y-4 p-6">
-        <div className="rounded-md border-2 border-eje-b bg-eje-b-soft p-5">
+      <div className="mx-auto max-w-2xl space-y-4 px-4 py-5 sm:p-6">
+        <div className="rounded-md border-2 border-eje-b bg-eje-b-soft p-4 sm:p-5">
           <p className="text-body-lg">{payload.closing}</p>
         </div>
         <Button axis="b" full onClick={() => onFinish({ completed, total: payload.challenges.length, reviews })}>
@@ -107,10 +107,10 @@ export function PromptWorkshopActivity({
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-5 p-6">
+    <div className="mx-auto max-w-2xl space-y-5 px-4 py-5 sm:p-6">
       {idx === 0 && !reply && (
         <div className="flex items-start justify-between gap-3">
-          <p className="text-body-lg">{payload.intro}</p>
+          <p className="min-w-0 text-body-lg">{payload.intro}</p>
           <ReadAloudButton text={payload.intro} />
         </div>
       )}
@@ -118,7 +118,7 @@ export function PromptWorkshopActivity({
       <p className="text-small font-semibold uppercase tracking-wide text-ink-3">
         Reto {idx + 1} de {payload.challenges.length}
       </p>
-      <section className="rounded-md border-2 border-eje-b bg-eje-b-soft p-5">
+      <section className="rounded-md border-2 border-eje-b bg-eje-b-soft p-4 sm:p-5">
         <p className="text-body-lg">{challenge.situation}</p>
       </section>
 
@@ -178,7 +178,9 @@ export function PromptWorkshopActivity({
             <div className="shrink-0">
               <Avatar avatarKey="nati" size="sm" label="Nati" />
             </div>
-            <p className="rounded-lg rounded-tl-sm bg-brand-soft px-4 py-3 text-body">{reply.content}</p>
+            <p className="min-w-0 break-words rounded-lg rounded-tl-sm bg-brand-soft px-4 py-3 text-body">
+              {reply.content}
+            </p>
           </div>
           <p className="text-micro text-ink-3">Nati es una IA y se puede equivocar.</p>
 

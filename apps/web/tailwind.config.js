@@ -13,6 +13,10 @@
  */
 export default {
   content: ['./index.html', './src/**/*.{ts,tsx}'],
+  // En una pantalla táctil el `:hover` se queda pegado después de tocar: el
+  // botón sigue resaltado hasta que se toca otra cosa. Con esto los estilos
+  // `hover:` solo aplican donde hay puntero de verdad (ratón o trackpad).
+  future: { hoverOnlyWhenSupported: true },
   theme: {
     extend: {
       colors: {

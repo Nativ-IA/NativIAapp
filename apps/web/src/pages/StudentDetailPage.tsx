@@ -53,9 +53,9 @@ export function StudentDetailPage() {
   if (error) return <ErrorState message={error} onRetry={() => nav('/profe/grupo')} />;
 
   return (
-    <div className="min-h-screen bg-surf">
+    <div className="screen pb-safe bg-surf">
       <header className="border-b border-line bg-white">
-        <div className="mx-auto flex max-w-4xl flex-wrap items-center gap-3 px-6 py-3">
+        <div className="mx-auto flex max-w-4xl flex-wrap items-center gap-x-3 gap-y-1 px-2 py-1.5 sm:px-6 sm:py-3">
           <button
             onClick={() => nav('/profe/grupo')}
             className="flex min-h-touch items-center gap-1.5 rounded-sm px-3 text-small font-semibold text-ink-2 hover:bg-surf"
@@ -72,7 +72,7 @@ export function StudentDetailPage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-4xl px-6 py-6">
+      <main className="mx-auto max-w-4xl px-4 py-5 sm:px-6 sm:py-6">
         {!data && <Skeleton className="h-64" />}
 
         {data && (
@@ -97,12 +97,14 @@ export function StudentDetailPage() {
                       key={m.axisCode}
                       className="flex items-center gap-3 rounded-lg border border-line bg-white p-3"
                     >
-                      <Emblem axis={code} size={40} />
+                      <span className="shrink-0">
+                        <Emblem axis={code} size={40} />
+                      </span>
                       <span className="min-w-0 flex-1 text-small font-semibold">
                         {AXIS_NAME[code]}
                       </span>
                       <span
-                        className={`flex items-center gap-2 rounded-sm px-3 py-1 text-small font-semibold ${lv.cls} ${lv.text}`}
+                        className={`flex shrink-0 items-center gap-2 rounded-sm px-2.5 py-1 text-small font-semibold sm:px-3 ${lv.cls} ${lv.text}`}
                       >
                         <span aria-hidden>{lv.glyph}</span>
                         {lv.label}
@@ -125,7 +127,7 @@ export function StudentDetailPage() {
                     const mk = MARKER[i.marker] ?? MARKER.acerto_con_pistas;
                     return (
                       <li key={i.interactionId} className="row">
-                        <div className="min-w-0 flex-1">
+                        <div className="min-w-0 flex-1 basis-[11rem]">
                           <p className="text-body font-semibold">{i.activityTitle}</p>
                           <p className="text-small text-ink-2">
                             {new Date(i.occurredAt).toLocaleDateString('es-CO')}
@@ -136,7 +138,9 @@ export function StudentDetailPage() {
                         >
                           {mk.label}
                         </span>
-                        <Button variant="secondary">Ver conversación</Button>
+                        <Button variant="secondary" full="mobile">
+                          Ver conversación
+                        </Button>
                       </li>
                     );
                   })}
@@ -179,9 +183,9 @@ export function StudentDetailPage() {
 
 function Stat({ value, label }: { value: number; label: string }) {
   return (
-    <div className="px-4 py-4 text-center">
-      <p className="text-h1 font-bold">{value}</p>
-      <p className="text-small text-ink-2">{label}</p>
+    <div className="min-w-0 px-1.5 py-3 text-center sm:px-4 sm:py-4">
+      <p className="text-h2 font-bold sm:text-h1">{value}</p>
+      <p className="text-micro text-ink-2 sm:text-small">{label}</p>
     </div>
   );
 }

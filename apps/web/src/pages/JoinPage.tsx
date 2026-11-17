@@ -9,6 +9,10 @@ import { Mark, CLAIM_ESTUDIANTE } from '../components/Logo';
 // desarrollo.
 const ALLOWED = /^[A-HJ-NP-RT-Za-hj-np-rt-z2-46-9]*$/;
 
+/** Dispositivo que se maneja con el dedo (celular o tableta). */
+const COARSE_POINTER =
+  typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches === true;
+
 export function JoinPage() {
   const [code, setCode] = useState('');
   const [focused, setFocused] = useState(false);
@@ -38,8 +42,8 @@ export function JoinPage() {
     'NativIA. Aprende a pensar con la IA. Escribe el código que te dio tu profe.';
 
   return (
-    <div className="flex min-h-screen flex-col bg-surf">
-      <main className="flex flex-1 items-center justify-center px-6 py-10">
+    <div className="flex screen pb-safe flex-col bg-surf">
+      <main className="flex flex-1 items-center justify-center px-4 py-8 sm:px-6 sm:py-10">
         <div className="w-full max-w-md">
           {/* El brote a tamaño grande es lo primero que se ve, antes del nombre:
               el producto entero cabe en ese gesto — aquí la IA no entrega
@@ -54,7 +58,7 @@ export function JoinPage() {
 
           <form
             onSubmit={submit}
-            className="mt-8 rounded-lg border border-line bg-white px-6 py-7"
+            className="mt-8 rounded-lg border border-line bg-white px-4 py-6 sm:px-6 sm:py-7"
           >
             <label htmlFor="code" className="block text-center text-body-lg font-semibold">
               Escribe el código que te dio tu profe
@@ -75,7 +79,13 @@ export function JoinPage() {
                 }}
                 autoComplete="off"
                 autoCapitalize="characters"
-                autoFocus
+                autoCorrect="off"
+                spellCheck={false}
+                enterKeyHint="go"
+                // En táctil el foco automático abre el teclado antes de que el
+                // niño haya visto la pantalla y le tapa la mitad. Ahí el campo
+                // se enfoca cuando toca las casillas.
+                autoFocus={!COARSE_POINTER}
                 inputMode="text"
                 maxLength={4}
                 onFocus={() => setFocused(true)}
@@ -86,14 +96,17 @@ export function JoinPage() {
               {/* El indicador de foco es la casilla activa, no un recuadro
                   alrededor del grupo: encerrar las cuatro en una caja negra
                   señalaba el sitio equivocado y tapaba el dibujo. */}
-              <div aria-hidden className="pointer-events-none flex justify-center gap-3">
+              <div aria-hidden className="pointer-events-none flex justify-center gap-2 sm:gap-3">
                 {[0, 1, 2, 3].map((i) => {
                   const filled = Boolean(code[i]);
                   const active = focused && i === code.length;
                   return (
                     <span
                       key={i}
-                      className={`flex h-[72px] w-[60px] items-center justify-center rounded-md border-2 text-h1 font-extrabold transition-colors ${
+                      // Cuatro casillas de 60 px más sus espacios no caben en
+                      // un celular de 320–360 px de ancho: se salían de la
+                      // tarjeta. En celular bajan a 52 px.
+                      className={`flex h-16 w-[52px] items-center justify-center rounded-md border-2 text-h1 font-extrabold transition-colors sm:h-[72px] sm:w-[60px] ${
                         active
                           ? 'border-brand bg-white outline outline-[3px] outline-offset-2 outline-brand'
                           : filled
@@ -121,13 +134,20 @@ export function JoinPage() {
             </div>
           </form>
 
-          <div className="mt-6 flex items-center justify-center gap-2">
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
             <ReadAloudButton text={speech} />
             <Link
               to="/profe"
-              className="min-h-touch rounded-sm px-3 py-2 text-small font-semibold text-ink-2 hover:bg-white"
+              className="flex min-h-touch items-center rounded-sm px-3 text-small font-semibold text-ink-2 hover:bg-white"
             >
               Soy profe
+            </Link>
+            {/* Para proyectar en el salón: abre un QR que lleva a esta página. */}
+            <Link
+              to="/qr"
+              className="flex min-h-touch items-center rounded-sm px-3 text-small font-semibold text-ink-2 hover:bg-white"
+            >
+              Código QR
             </Link>
           </div>
         </div>

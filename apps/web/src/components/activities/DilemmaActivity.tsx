@@ -42,12 +42,12 @@ export function DilemmaActivity({
   const option = payload.options.find((o) => o.key === chosen);
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6 p-6">
+    <div className="mx-auto max-w-2xl space-y-6 px-4 py-5 sm:p-6">
       <div className="flex justify-end">
         <ReadAloudButton text={`${payload.situation} ${payload.question}`} />
       </div>
 
-      <section className="prose-block rounded-md border-2 border-eje-d bg-eje-d-soft p-5">
+      <section className="prose-block rounded-md border-2 border-eje-d bg-eje-d-soft p-4 sm:p-5">
         <p className="text-body-lg">{payload.situation}</p>
       </section>
 
@@ -62,7 +62,7 @@ export function DilemmaActivity({
                 setChosen(o.key);
                 setPhase('consecuencia');
               }}
-              className="min-h-touch-lg w-full rounded-md border-2 border-line px-5 py-4 text-left text-body hover:border-eje-d hover:bg-eje-d-soft"
+              className="min-h-touch-lg w-full rounded-md border-2 border-line px-4 py-4 text-left text-body hover:border-eje-d hover:bg-eje-d-soft active:border-eje-d active:bg-eje-d-soft sm:px-5"
             >
               <strong className="text-eje-d">{o.key}</strong> · {o.label}
             </button>
@@ -76,7 +76,7 @@ export function DilemmaActivity({
       {/* Paso 2 · consecuencia + pregunta de segundo orden */}
       {phase === 'consecuencia' && option && (
         <section className="space-y-5">
-          <div className="rounded-md border-2 border-line p-5">
+          <div className="rounded-md border-2 border-line p-4 sm:p-5">
             <p className="text-small font-semibold uppercase tracking-wide text-ink-3">
               Qué pasó después
             </p>
@@ -139,13 +139,13 @@ export function DilemmaActivity({
             ))}
           </ul>
 
-          <div className="rounded-md border-2 border-line p-5">
+          <div className="rounded-md border-2 border-line p-4 sm:p-5">
             <p className="text-body-lg">{payload.closing}</p>
             <div className="mt-4 flex flex-wrap gap-3">
               <button
                 onClick={() => setChangedMind(true)}
                 aria-pressed={changedMind === true}
-                className={`min-h-touch rounded-full border-2 px-5 text-body ${
+                className={`min-h-touch flex-1 rounded-full border-2 px-4 py-1.5 text-body sm:flex-none sm:px-5 ${
                   changedMind === true
                     ? 'border-eje-d bg-eje-d font-semibold text-white'
                     : 'border-line text-ink-2'
@@ -156,7 +156,7 @@ export function DilemmaActivity({
               <button
                 onClick={() => setChangedMind(false)}
                 aria-pressed={changedMind === false}
-                className={`min-h-touch rounded-full border-2 px-5 text-body ${
+                className={`min-h-touch flex-1 rounded-full border-2 px-4 py-1.5 text-body sm:flex-none sm:px-5 ${
                   changedMind === false
                     ? 'border-eje-d bg-eje-d font-semibold text-white'
                     : 'border-line text-ink-2'

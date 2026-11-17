@@ -133,6 +133,41 @@ pnpm check:palette # verifica la paleta del design system (requiere Python)
 `pnpm test` incluye la prueba que protege la regla central del producto: que ni el tutor ni los
 árboles pregrabados puedan revelar la respuesta.
 
+### Celulares y tabletas
+
+La aplicación se adapta a celular y tableta, en iOS y Android: la barra del estudiante se compacta,
+el diálogo con el tutor pasa a dos pestañas («El problema» / «Tu conversación») por debajo de
+1024 px, las listas apilan sus botones y nada se desplaza de lado. Respeta la muesca y la barra de
+inicio (`env(safe-area-inset-*)`), mide la pantalla con `dvh` y se puede **agregar a la pantalla de
+inicio** con su icono (`apps/web/public/manifest.webmanifest`).
+
+La ruta **`/qr`** dibuja un código QR que abre la portada de la misma dirección desde la que se
+abrió —sirve igual en Cloud Run, en el enlace público o en la red local— con botones para copiar el
+enlace, descargarlo como PNG y compartirlo.
+
+### Abrir la demo desde un celular (QR)
+
+```powershell
+pnpm demo:movil            # enlace público temporal + código QR
+pnpm demo:movil --red      # solo la red local (misma Wi-Fi), sin túnel
+pnpm demo:movil --rapido   # vuelve a arrancar sin reinstalar ni recompilar
+```
+
+En Windows también sirve hacer doble clic en **`demo-movil.cmd`**, en la raíz del repositorio.
+
+Compila el front, arranca la API en modo producción (una sola dirección, como en Cloud Run) y abre
+un túnel de Cloudflare: imprime un enlace `https://….trycloudflare.com` con su QR y abre `/qr` en
+el navegador para proyectarlo. Usa la base que diga `.env`, tal como esté: **no migra ni siembra**.
+
+- El enlace funciona desde cualquier red **mientras la ventana siga abierta** y **cambia cada vez**
+  que se arranca. Para una dirección fija está el despliegue en Cloud Run, más abajo.
+- La primera vez descarga `cloudflared` (herramienta oficial de Cloudflare, ~55 MB) a
+  `%LOCALAPPDATA%\nativia-demo`, fuera del repositorio. Si ya está instalado, usa ese.
+- Con `--red` la dirección es la del computador en la red (`http://192.168.x.x:3000`): los
+  celulares deben estar en la misma Wi-Fi y Windows puede pedir permiso de firewall para Node.
+- Quien tenga el enlace puede entrar con las cuentas de demostración de arriba, igual que en la
+  demo en la nube: solo datos sintéticos.
+
 ---
 
 ## Despliegue de la demo (Google Cloud Run)

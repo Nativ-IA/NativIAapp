@@ -63,9 +63,9 @@ export function AvatarPage() {
 
   if (!students) {
     return (
-      <div className="mx-auto max-w-3xl space-y-6 p-8">
+      <div className="mx-auto max-w-3xl space-y-6 px-4 py-6 sm:p-8">
         <Skeleton className="h-10 w-64" />
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
           {Array.from({ length: 8 }).map((_, i) => (
             <Skeleton key={i} className="h-36" />
           ))}
@@ -77,21 +77,21 @@ export function AvatarPage() {
   // ── Paso 2: PIN gráfico ────────────────────────────────────────────────────
   if (chosen) {
     return (
-      <div className="min-h-screen bg-surf">
-        <div className="mx-auto max-w-2xl px-6 py-8">
+      <div className="screen pb-safe bg-surf">
+        <div className="mx-auto max-w-2xl px-4 py-4 sm:px-6 sm:py-8">
           <button
             onClick={() => {
               setChosen(null);
               setPin([]);
               setError(null);
             }}
-            className="mb-6 flex min-h-touch items-center gap-2 rounded-sm px-3 text-small font-semibold text-ink-2 hover:bg-white"
+            className="mb-3 flex min-h-touch items-center gap-2 rounded-sm px-3 text-small font-semibold text-ink-2 hover:bg-white sm:mb-6"
           >
             <Icon name="arrow-left" size={18} />
             Volver
           </button>
 
-          <div className="rounded-lg border border-line bg-white px-6 py-8 text-center">
+          <div className="rounded-lg border border-line bg-white px-4 py-6 text-center sm:px-6 sm:py-8">
             <div className="flex justify-center">
               <Avatar avatarKey={chosen.avatarKey} size="lg" />
             </div>
@@ -121,7 +121,7 @@ export function AvatarPage() {
               ))}
             </div>
 
-            <div className="mx-auto mt-6 grid max-w-md grid-cols-3 gap-3">
+            <div className="mx-auto mt-6 grid max-w-md grid-cols-3 gap-2 sm:gap-3">
               {PIN_KEYS.map((key) => (
                 <button
                   key={key}
@@ -132,7 +132,7 @@ export function AvatarPage() {
                   }}
                   disabled={pin.length >= 3}
                   aria-label={PIN_LABEL[key]}
-                  className="flex min-h-[96px] items-center justify-center rounded-md border-2 border-line transition-colors hover:border-eje-b hover:bg-eje-b-soft disabled:opacity-40 disabled:hover:border-line disabled:hover:bg-transparent"
+                  className="flex min-h-[84px] items-center justify-center rounded-md border-2 border-line transition-colors hover:border-eje-b hover:bg-eje-b-soft active:border-eje-b active:bg-eje-b-soft disabled:opacity-40 disabled:hover:border-line disabled:hover:bg-transparent sm:min-h-[96px]"
                 >
                   <PinSymbol symbol={key} size={56} />
                 </button>
@@ -158,8 +158,8 @@ export function AvatarPage() {
 
   // ── Paso 1: elegir avatar ──────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-surf">
-      <div className="mx-auto max-w-3xl px-6 py-8">
+    <div className="screen pb-safe bg-surf">
+      <div className="mx-auto max-w-3xl px-4 py-5 sm:px-6 sm:py-8">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-small text-ink-2">{teacher && `Prof. ${teacher}`}</p>
           <ReadAloudButton text="¿Cuál eres tú? Toca tu animal." />
@@ -168,15 +168,15 @@ export function AvatarPage() {
         <h1 className="mt-4 text-center text-h1 font-bold">¿Cuál eres tú?</h1>
         <p className="mt-1 text-center text-body text-ink-2">Toca tu animal.</p>
 
-        <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <div className="mt-6 grid grid-cols-2 gap-3 sm:mt-8 sm:grid-cols-4 sm:gap-4">
           {students.map((s) => (
             <button
               key={s.studentProfileId}
               onClick={() => setChosen(s)}
-              className="flex min-h-[136px] flex-col items-center justify-center gap-3 rounded-lg border border-line bg-white p-4 transition-colors hover:border-eje-b hover:bg-eje-b-soft"
+              className="flex min-h-[136px] min-w-0 flex-col items-center justify-center gap-3 rounded-lg border border-line bg-white p-3 transition-colors hover:border-eje-b hover:bg-eje-b-soft active:border-eje-b active:bg-eje-b-soft sm:p-4"
             >
               <Avatar avatarKey={s.avatarKey} size="lg" label={s.firstName} />
-              <span className="text-body font-bold">{s.firstName}</span>
+              <span className="max-w-full break-words text-body font-bold">{s.firstName}</span>
             </button>
           ))}
         </div>

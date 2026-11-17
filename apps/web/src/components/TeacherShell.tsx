@@ -34,29 +34,31 @@ export function TeacherShell({
   ];
 
   return (
-    <div className="min-h-screen bg-surf">
+    <div className="screen pb-safe bg-surf">
       <header className="border-b border-line bg-white">
-        <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-3 gap-y-2 px-6 py-3">
+        {/* En celular la barra son dos filas: marca y «Salir» arriba; curso y
+            hora del cálculo abajo, a todo lo ancho. Desde tableta, una sola. */}
+        <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-3 gap-y-0.5 px-4 py-1.5 sm:px-6 sm:py-3">
           <Mark className="h-7 w-7 shrink-0 text-brand" />
           <p className="text-body font-bold">
             Nativ<span className="text-brand">IA</span>
           </p>
           {classroomLabel && (
-            <>
-              <span aria-hidden className="text-line">
-                |
-              </span>
-              <p className="text-body font-semibold text-ink-2">{classroomLabel}</p>
-            </>
+            <span aria-hidden className="hidden text-line sm:inline">
+              |
+            </span>
           )}
 
-          <div className="flex-1" />
-
-          {computedAt && (
-            <p className="text-micro text-ink-3">
-              Datos de las {new Date(computedAt).toLocaleTimeString('es-CO')}
-            </p>
-          )}
+          <div className="order-last flex min-w-0 basis-full flex-wrap items-baseline justify-between gap-x-3 pb-1 sm:order-none sm:flex-1 sm:basis-0 sm:pb-0">
+            {classroomLabel && (
+              <p className="min-w-0 text-body font-semibold text-ink-2">{classroomLabel}</p>
+            )}
+            {computedAt && (
+              <p className="ml-auto text-micro text-ink-3">
+                Datos de las {new Date(computedAt).toLocaleTimeString('es-CO')}
+              </p>
+            )}
+          </div>
 
           <button
             onClick={() => {
@@ -64,21 +66,21 @@ export function TeacherShell({
               localStorage.removeItem('nativia.teacher');
               nav('/profe');
             }}
-            className="flex min-h-touch items-center gap-2 rounded-sm px-3 text-small font-semibold text-ink-2 hover:bg-surf"
+            className="ml-auto flex min-h-touch items-center gap-2 rounded-sm px-3 text-small font-semibold text-ink-2 hover:bg-surf"
           >
             <Icon name="log-out" size={18} />
             Salir
           </button>
         </div>
 
-        <nav className="mx-auto flex max-w-5xl gap-1 px-6">
+        <nav className="mx-auto flex max-w-5xl gap-1 px-2 sm:px-6">
           {tabs.map((t) => (
             <NavLink
               key={t.to}
               to={t.to}
               end={t.end}
               className={({ isActive }) =>
-                `-mb-px border-b-2 px-4 py-2.5 text-small font-semibold transition-colors ${
+                `-mb-px flex min-h-touch items-center border-b-2 px-4 text-small font-semibold transition-colors ${
                   isActive
                     ? 'border-brand text-brand'
                     : 'border-transparent text-ink-2 hover:text-ink'
@@ -91,7 +93,7 @@ export function TeacherShell({
         </nav>
       </header>
 
-      <main className="mx-auto max-w-5xl px-6 py-6">{children}</main>
+      <main className="mx-auto max-w-5xl px-4 py-5 sm:px-6 sm:py-6">{children}</main>
     </div>
   );
 }
