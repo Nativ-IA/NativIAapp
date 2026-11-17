@@ -28,43 +28,60 @@ gsutil cp nati_gguf/*.q4_k_m.gguf gs://$PROJECT-nati-models/nati/nati-q4_k_m.ggu
 
 ```bash
 cd deploy/nati-model
+# Permiso de lectura del bucket a la cuenta del servicio (antes de desplegar):
+NUM=$(gcloud projects describe $PROJECT --format 'value(projectNumber)')
+gcloud storage buckets add-iam-policy-binding gs://$PROJECT-nati-models \
+  --member serviceAccount:$NUM-compute@developer.gserviceaccount.com --role roles/storage.objectViewer
+
+KEY=$(openssl rand -hex 24); echo $KEY > ~/nati-key.txt
 gcloud run deploy nati-model \
   --source . --region $REGION \
-  --cpu 4 --memory 8Gi \
-  --min-instances 1 --max-instances 2 \
+  --cpu 4 --memory 8Gi --cpu-boost \
+  --min-instances 0 --max-instances 1 \
   --concurrency 2 --timeout 120 \
-  --no-allow-unauthenticated \
-  --set-env-vars MODEL_GCS_URI=gs://$PROJECT-nati-models/nati/nati-q4_k_m.gguf
-
-# Permiso de lectura del bucket a la cuenta del servicio:
-SA=$(gcloud run services describe nati-model --region $REGION --format 'value(spec.template.spec.serviceAccountName)')
-gsutil iam ch serviceAccount:${SA:-$(gcloud projects describe $PROJECT --format 'value(projectNumber)')-compute@developer.gserviceaccount.com}:objectViewer gs://$PROJECT-nati-models
+  --allow-unauthenticated \
+  --startup-probe httpGet.path=/health,periodSeconds=10,failureThreshold=24,timeoutSeconds=5 \
+  --set-env-vars MODEL_GCS_URI=gs://$PROJECT-nati-models/nati/nati-q4_k_m.gguf,LLAMA_API_KEY=$KEY
 ```
 
-`--min-instances 1` evita el arranque en frío (descargar 1,5 GB y cargar el
-modelo tarda ~1 min). Con 4 vCPU el modelo responde en 3–8 s. Para la demo
-alcanza; para un piloto real conviene una GPU (L4) o un modelo más chico.
+**La sonda de arranque es obligatoria.** llama-server abre el puerto antes de
+terminar de cargar el modelo y responde 503 «Loading model». Sin la sonda,
+Cloud Run da la instancia por lista y, entre peticiones, casi no le da CPU: el
+modelo no termina de cargar nunca. Con la sonda en `/health`, Cloud Run espera
+con CPU completa hasta que el modelo está cargado.
 
-## 4. Conectar la API de NativIA
+`--min-instances 0` no cobra mientras nadie lo usa, pero la primera pregunta
+tras un rato quieto tarda ~1 min (descarga y carga). El día de la demo:
+`gcloud run services update nati-model --region $REGION --min-instances 1`, y
+después volver a 0. Con 4 vCPU el modelo responde en ~8 s. Para un piloto real
+conviene una GPU (L4) o un modelo más chico.
 
-La forma más simple es que la API llame al servicio con su propia identidad.
-En Cloud Run, la API ya tiene cuenta de servicio; dale el rol `run.invoker`
-sobre `nati-model` y pasa la URL:
+## 4. Conectar la API de NativIA, con verificador
+
+El servicio queda público, pero protegido por `LLAMA_API_KEY`: sin la clave
+responde 401. La API la manda en `NATI_MODEL_API_KEY`.
+
+**Nunca conectes el modelo sin verificador.** El verificador revisa cada
+respuesta antes de mostrarla. Con Gemini en Vertex AI no hace falta clave (usa
+la identidad del servicio) y en la prueba gratuita de Google Cloud sale de los
+créditos:
 
 ```bash
+gcloud services enable aiplatform.googleapis.com
+gcloud projects add-iam-policy-binding $PROJECT \
+  --member serviceAccount:$NUM-compute@developer.gserviceaccount.com --role roles/aiplatform.user
+
 NATI_URL=$(gcloud run services describe nati-model --region $REGION --format 'value(status.url)')
-gcloud run services add-iam-policy-binding nati-model --region $REGION \
-  --member serviceAccount:<cuenta-de-servicio-de-la-api> --role roles/run.invoker
-gcloud run services update nativia --region $REGION \
-  --update-env-vars NATI_MODEL_URL=$NATI_URL
+gcloud run services update nativia --region $REGION --update-env-vars \
+  "NATI_MODEL_URL=$NATI_URL,NATI_MODEL_API_KEY=$(cat ~/nati-key.txt),NATI_VERIFIER=vertex,VERTEX_PROJECT=$PROJECT"
 ```
 
-Nota: con `--no-allow-unauthenticated` la API debe mandar un token de
-identidad de Google en `Authorization`. La versión actual de
-`nati-provider.ts` manda `NATI_MODEL_API_KEY` como Bearer; para la demo
-puedes desplegar con `--allow-unauthenticated` y `LLAMA_API_KEY=<clave larga>`
-y poner esa misma clave en `NATI_MODEL_API_KEY`. Para producción, cambiar el
-proveedor a token de identidad (una llamada al servidor de metadatos).
+El tutor del eje B no cambia: sigue con `MOCK_LLM` como esté. Para usar Claude
+Haiku como verificador en vez de Gemini: `NATI_VERIFIER=anthropic`,
+`MOCK_LLM=false` y `ANTHROPIC_API_KEY`.
+
+Para producción, mejor `--no-allow-unauthenticated` en `nati-model` y que la
+API mande un token de identidad de Google en vez de la clave.
 
 ## 5. Probar
 
