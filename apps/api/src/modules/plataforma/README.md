@@ -25,8 +25,10 @@ Este módulo no es dueño de ninguna tabla. Arma cada pantalla pidiendo los dato
 | Consumo de IA | Conversaciones y tokens del mes por colegio; costo si hay tarifa | `tutor` |
 | Auditoría | Quién hizo qué, cuándo y en qué colegio | `privacidad`, `identidad`, `instituciones` |
 
-Esas funciones viven en el `admin.ts` de cada módulo, usan `dbGlobal` (cruzan colegios) y solo se
-exportan para este módulo. Toda acción que cambia algo escribe en la auditoría.
+Esas funciones viven en el `admin.ts` de cada módulo y usan `dbGlobal` (cruzan colegios), siempre
+con el colegio explícito. Las de `instituciones` e `identidad` las comparte el panel de
+coordinación (`coordinacion/`), que les pasa el colegio activo de la petición. Toda acción que
+cambia algo escribe en la auditoría.
 
 Las contraseñas temporales se muestran una sola vez; en la base queda solo su hash.
 

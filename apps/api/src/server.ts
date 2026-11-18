@@ -21,6 +21,7 @@ import { tutorRoutes } from './modules/tutor/index.js';
 import { analiticaRoutes } from './modules/analitica/index.js';
 import { privacidadRoutes } from './modules/privacidad/index.js';
 import { plataformaRoutes } from './modules/plataforma/index.js';
+import { coordinacionRoutes } from './modules/coordinacion/index.js';
 import { natiRoutes } from './modules/nati/index.js';
 
 const isProduction = config.NODE_ENV === 'production';
@@ -81,6 +82,7 @@ export async function buildServer() {
     await v1.register(analiticaRoutes);
     await v1.register(privacidadRoutes);
     await v1.register(plataformaRoutes); // panel del equipo (/v1/admin)
+    await v1.register(coordinacionRoutes); // panel de coordinación (/v1/school)
     await v1.register(natiRoutes); // reservado: asistente Nati
   }, { prefix: '/v1' });
 

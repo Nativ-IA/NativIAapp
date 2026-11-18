@@ -1,9 +1,10 @@
 // =============================================================================
 // Operaciones del panel de administración sobre las cuentas de adultos.
 //
-// Solo adultos: los estudiantes no tienen correo ni contraseña (ADR-009) y el
-// equipo de plataforma no los gestiona uno a uno. Usan dbGlobal con el colegio
-// explícito; solo las llama el módulo plataforma, detrás de requireAdmin.
+// Solo adultos: los estudiantes no tienen correo ni contraseña (ADR-009); sus
+// cuentas están en estudiantes.ts. Usan dbGlobal con el colegio explícito: las
+// llaman el panel de plataforma (cruza colegios) y el de coordinación (pasa el
+// colegio activo de la petición).
 // =============================================================================
 
 import { randomInt } from 'node:crypto';

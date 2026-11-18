@@ -43,6 +43,17 @@ const ROUTES: Array<[string, string]> = [
   ['POST', '/v1/admin/staff/:userId/status'],
   ['POST', '/v1/admin/staff/:userId/password'],
   ['GET', '/v1/admin/audit'],
+  // Panel de coordinación
+  ['GET', '/v1/school'],
+  ['GET', '/v1/school/classrooms/:classroomId'],
+  ['POST', '/v1/school/classrooms/:classroomId/students'],
+  ['POST', '/v1/school/students/:studentId/consent'],
+  ['POST', '/v1/school/students/:studentId/pin'],
+  ['POST', '/v1/school/students/:studentId/withdraw'],
+  ['POST', '/v1/school/classrooms/:classroomId/staff'],
+  ['POST', '/v1/school/classrooms/:classroomId/staff/:userId/remove'],
+  ['POST', '/v1/school/classrooms/:classroomId/join-code'],
+  ['POST', '/v1/school/alerts/:alertId/review'],
 ];
 
 let app: FastifyInstance;

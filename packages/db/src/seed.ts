@@ -17,7 +17,9 @@ import { ACTIVITIES, AXES } from '@nativia/content';
 
 const prisma = new PrismaClient();
 
-const DEMO_STUDENTS = [
+type Estudiante = { firstName: string; lastName: string; avatarKey: string };
+
+const DEMO_STUDENTS: Estudiante[] = [
   { firstName: 'Sara', lastName: 'G.', avatarKey: 'zorro' },
   { firstName: 'Andrés', lastName: 'L.', avatarKey: 'tortuga' },
   { firstName: 'Keila', lastName: 'M.', avatarKey: 'guacamaya' },
@@ -28,8 +30,17 @@ const DEMO_STUDENTS = [
   { firstName: 'Diego', lastName: 'S.', avatarKey: 'rana' },
 ];
 
+/** Segundo curso del primer colegio, sin docente asignado y con dos
+ *  autorizaciones pendientes: lo que coordinación resuelve en la demo. */
+const TERCERO_STUDENTS: Estudiante[] = [
+  { firstName: 'Camila', lastName: 'R.', avatarKey: 'rana' },
+  { firstName: 'Tomás', lastName: 'V.', avatarKey: 'jaguar' },
+  { firstName: 'Antonia', lastName: 'P.', avatarKey: 'mariposa' },
+  { firstName: 'Emilio', lastName: 'D.', avatarKey: 'tortuga' },
+];
+
 /** Estudiantes del segundo colegio: sirven para mostrar que no se mezclan. */
-const OTHER_SCHOOL_STUDENTS = [
+const OTHER_SCHOOL_STUDENTS: Estudiante[] = [
   { firstName: 'Valentina', lastName: 'C.', avatarKey: 'guacamaya' },
   { firstName: 'Samuel', lastName: 'P.', avatarKey: 'jaguar' },
   { firstName: 'Isabella', lastName: 'T.', avatarKey: 'mariposa' },
@@ -70,37 +81,64 @@ const BADGES = [
   },
 ];
 
-interface DemoSchool {
-  name: string;
-  daneCode: string;
-  campus: string;
-  grade: number;
-  section: string;
-  joinCode: string;
-  teacher: { firstName: string; lastName: string; email: string };
-  students: Array<{ firstName: string; lastName: string; avatarKey: string }>;
-  /** PIN gráfico de demostración: las mismas 3 imágenes para todos, para que
-   *  la demo sea usable. En producción cada niño elige el suyo (ADR-009). */
+/** Contraseña y PIN de demostración: los mismos para todos, para que la demo
+ *  sea usable. En producción cada adulto recibe una contraseña temporal y cada
+ *  niño su propio PIN (ADR-009). */
+interface Credenciales {
   pinHash: string;
-  teacherPasswordHash: string;
+  passwordHash: string;
 }
 
-/** Crea un colegio con un curso, su docente titular y sus estudiantes. Todo
- *  registro lleva el institutionId del colegio (multi-colegio). */
-async function crearColegio(c: DemoSchool) {
+/** Crea un colegio con su primera sede. Todo registro que cuelga de él lleva
+ *  su institutionId (multi-colegio). */
+async function crearColegio(c: { name: string; daneCode: string; campus: string }) {
   const institution = await prisma.institution.create({
     data: { name: c.name, daneCode: c.daneCode, city: 'Bogotá D.C.', sector: 'oficial' },
   });
-  const institutionId = institution.id;
-
   const campus = await prisma.campus.create({
-    data: { institutionId, name: c.campus },
+    data: { institutionId: institution.id, name: c.campus },
   });
+  return { institutionId: institution.id, campusId: campus.id };
+}
 
+async function crearAdulto(
+  institutionId: string,
+  a: { firstName: string; lastName: string; email: string; role: 'teacher' | 'coordinator' },
+  cred: Credenciales,
+) {
+  return prisma.user.create({
+    data: {
+      institutionId,
+      role: a.role,
+      firstName: a.firstName,
+      lastName: a.lastName,
+      email: a.email,
+      passwordHash: cred.passwordHash,
+    },
+  });
+}
+
+/** Crea un curso con su docente titular (si lo hay) y sus estudiantes. */
+async function crearCurso(
+  colegio: { institutionId: string; campusId: string },
+  c: {
+    grade: number;
+    section: string;
+    joinCode: string;
+    titularId?: string;
+    students: Estudiante[];
+    /** Quedan SIN autorización: la cuenta no entra hasta tenerla (US-09). */
+    sinAutorizacion?: string[];
+    /** Arrancan con el presupuesto agotado: degradación transparente (US-11). */
+    presupuestoAgotado?: string[];
+  },
+  cred: Credenciales,
+) {
+  const { institutionId } = colegio;
   const classroom = await prisma.classroom.create({
     data: {
       institutionId,
-      campusId: campus.id,
+      campusId: colegio.campusId,
       grade: c.grade,
       shift: 'manana',
       section: c.section,
@@ -112,36 +150,26 @@ async function crearColegio(c: DemoSchool) {
     },
   });
 
-  const teacher = await prisma.user.create({
-    data: {
-      institutionId,
-      role: 'teacher',
-      firstName: c.teacher.firstName,
-      lastName: c.teacher.lastName,
-      email: c.teacher.email,
-      passwordHash: c.teacherPasswordHash,
-    },
-  });
-
-  await prisma.classroomAssignment.create({
-    data: {
-      institutionId,
-      userId: teacher.id,
-      classroomId: classroom.id,
-      role: 'titular',
-      canViewTranscripts: true,
-      canResolveRiskAlerts: true,
-    },
-  });
+  if (c.titularId) {
+    await prisma.classroomAssignment.create({
+      data: {
+        institutionId,
+        userId: c.titularId,
+        classroomId: classroom.id,
+        role: 'titular',
+        canViewTranscripts: true,
+        canResolveRiskAlerts: true,
+      },
+    });
+  }
 
   for (const s of c.students) {
     const user = await prisma.user.create({
       data: { institutionId, role: 'student', firstName: s.firstName, lastName: s.lastName },
     });
 
-    // Elena queda SIN consentimiento a propósito: demuestra que la cuenta
-    // permanece bloqueada hasta que exista autorización vigente (US-09).
-    const hasConsent = s.firstName !== 'Elena';
+    const hasConsent = !c.sinAutorizacion?.includes(s.firstName);
+    const agotado = c.presupuestoAgotado?.includes(s.firstName) ?? false;
 
     const profile = await prisma.studentProfile.create({
       data: {
@@ -149,7 +177,7 @@ async function crearColegio(c: DemoSchool) {
         userId: user.id,
         classroomId: classroom.id,
         avatarKey: s.avatarKey,
-        graphicPinHash: c.pinHash,
+        graphicPinHash: cred.pinHash,
         isUnlocked: hasConsent,
         a11ySettings: JSON.stringify({
           textScale: 1.0,
@@ -182,24 +210,22 @@ async function crearColegio(c: DemoSchool) {
         studentProfileId: profile.id,
         period: new Date().toISOString().slice(0, 7),
         limitTokens: Number(process.env.STUDENT_MONTHLY_TOKEN_LIMIT ?? 60000),
-        // Mateo arranca con el presupuesto agotado: demuestra la degradación
-        // transparente al árbol pregrabado (US-11).
-        outputTokensUsed: s.firstName === 'Mateo' ? 60000 : 0,
-        isExhausted: s.firstName === 'Mateo',
+        outputTokensUsed: agotado ? 60000 : 0,
+        isExhausted: agotado,
       },
     });
   }
 
   console.log(
-    `  ${c.name}: curso ${c.grade}.º ${c.section} (código ${c.joinCode}), ` +
-      `${c.students.length} estudiantes, docente ${c.teacher.email}`,
+    `    curso ${c.grade}.º ${c.section} (código ${c.joinCode}): ${c.students.length} estudiantes` +
+      (c.titularId ? '' : ', sin docente asignado'),
   );
 }
 
 /** Vacía todas las tablas de la app (no la de migraciones). */
 async function resetDemo() {
   const tables = await prisma.$queryRaw<Array<{ tablename: string }>>`
-    SELECT tablename FROM pg_tables
+    SELECT tablename::text AS tablename FROM pg_tables
     WHERE schemaname = current_schema() AND tablename <> '_prisma_migrations'`;
   if (tables.length === 0) return;
   const list = tables.map((t) => `"${t.tablename}"`).join(', ');
@@ -221,34 +247,76 @@ async function main() {
   // --- Colegios de demostración -------------------------------------------
   // Dos colegios para mostrar el multi-colegio: cada docente ve solo su curso,
   // y un código de ingreso lleva solo a los estudiantes de su colegio.
-  const pinHash = await argon2.hash('brote|arepa|montana');
-  const teacherPasswordHash = await argon2.hash('demo1234');
+  const cred: Credenciales = {
+    pinHash: await argon2.hash('brote|arepa|montana'),
+    passwordHash: await argon2.hash('demo1234'),
+  };
 
-  await crearColegio({
+  const ied = await crearColegio({
     name: 'IED de Demostración',
     daneCode: 'DEMO-0001',
     campus: 'Sede A',
-    grade: 4,
-    section: 'B',
-    joinCode: '4B7K',
-    teacher: { firstName: 'Luz Mery', lastName: 'Prieto', email: 'docente@demo.local' },
-    students: DEMO_STUDENTS,
-    pinHash,
-    teacherPasswordHash,
   });
+  console.log('  IED de Demostración');
+  const luzMery = await crearAdulto(
+    ied.institutionId,
+    { firstName: 'Luz Mery', lastName: 'Prieto', email: 'docente@demo.local', role: 'teacher' },
+    cred,
+  );
+  // Docente sin curso: en la demo, coordinación lo asigna a 3.º A.
+  await crearAdulto(
+    ied.institutionId,
+    { firstName: 'Carlos Andrés', lastName: 'Mejía', email: 'docente3@demo.local', role: 'teacher' },
+    cred,
+  );
+  await crearAdulto(
+    ied.institutionId,
+    { firstName: 'Jairo', lastName: 'Castañeda', email: 'coordinacion@demo.local', role: 'coordinator' },
+    cred,
+  );
+  await crearCurso(
+    ied,
+    {
+      grade: 4,
+      section: 'B',
+      joinCode: '4B7K',
+      titularId: luzMery.id,
+      students: DEMO_STUDENTS,
+      sinAutorizacion: ['Elena'],
+      presupuestoAgotado: ['Mateo'],
+    },
+    cred,
+  );
+  await crearCurso(
+    ied,
+    {
+      grade: 3,
+      section: 'A',
+      joinCode: '9QPT',
+      students: TERCERO_STUDENTS,
+      sinAutorizacion: ['Antonia', 'Emilio'],
+    },
+    cred,
+  );
+  console.log('    docentes docente@demo.local y docente3@demo.local, coordinación coordinacion@demo.local');
 
-  await crearColegio({
+  const cerezos = await crearColegio({
     name: 'Colegio Distrital Los Cerezos (demo)',
     daneCode: 'DEMO-0002',
     campus: 'Sede principal',
-    grade: 5,
-    section: 'A',
-    joinCode: '7HWM',
-    teacher: { firstName: 'Hernán', lastName: 'Rojas', email: 'docente2@demo.local' },
-    students: OTHER_SCHOOL_STUDENTS,
-    pinHash,
-    teacherPasswordHash,
   });
+  console.log('  Colegio Distrital Los Cerezos (demo)');
+  const hernan = await crearAdulto(
+    cerezos.institutionId,
+    { firstName: 'Hernán', lastName: 'Rojas', email: 'docente2@demo.local', role: 'teacher' },
+    cred,
+  );
+  await crearCurso(
+    cerezos,
+    { grade: 5, section: 'A', joinCode: '7HWM', titularId: hernan.id, students: OTHER_SCHOOL_STUDENTS },
+    cred,
+  );
+  console.log('    docente docente2@demo.local');
 
   // --- Equipo de plataforma ------------------------------------------------
   // Rol admin SIN colegio: entra al panel de administración (/admin) y no ve
@@ -260,7 +328,7 @@ async function main() {
       firstName: 'Equipo',
       lastName: 'NativIA',
       email: 'admin@nativia.local',
-      passwordHash: teacherPasswordHash,
+      passwordHash: cred.passwordHash,
     },
   });
   console.log('  Equipo de plataforma: admin@nativia.local');
@@ -345,6 +413,7 @@ async function main() {
   console.log('\nListo.');
   console.log('  Estudiante  → código de curso 4B7K (o 7HWM, el otro colegio), elige tu avatar');
   console.log('  Docente     → docente@demo.local o docente2@demo.local / demo1234');
+  console.log('  Coordinación → coordinacion@demo.local / demo1234 (en /profe)');
   console.log('  Plataforma  → /admin con admin@nativia.local / demo1234');
   console.log('  Elena M. no puede entrar: no tiene autorización del acudiente.');
   console.log('  Mateo R. tiene el presupuesto agotado: verás el modo degradado.');

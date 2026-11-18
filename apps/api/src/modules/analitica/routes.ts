@@ -4,6 +4,7 @@ import { db } from '../../shared/db.js';
 import { AXES } from '../contenido/index.js';
 import { computeTriage } from './triage.js';
 import { audit } from '../privacidad/index.js';
+import { compararAlertas } from './alertas-colegio.js';
 import { canAccessClassroom } from '../instituciones/index.js';
 import { forbidden } from '../../shared/http.js';
 
@@ -19,11 +20,15 @@ export async function analiticaRoutes(app: FastifyInstance) {
 
     const triage = await computeTriage(classroomId);
 
-    const alerts = await db.teacherAlert.findMany({
-      where: { classroomId, status: 'abierta', deletedAt: null },
-      orderBy: [{ severity: 'asc' }, { createdAt: 'desc' }],
-      take: 3, // techo de 3: diez alertas equivalen a ninguna
-    });
+    // Techo de 3: diez alertas equivalen a ninguna. Se ordena aquí y no en la
+    // base para que las críticas vayan siempre primero (compararAlertas).
+    const alerts = (
+      await db.teacherAlert.findMany({
+        where: { classroomId, status: 'abierta', deletedAt: null },
+      })
+    )
+      .sort(compararAlertas)
+      .slice(0, 3);
 
     const moderationPending = await db.teacherAlert.count({
       where: { classroomId, code: 'A-RIESGO', status: 'abierta' },
@@ -223,11 +228,13 @@ export async function analiticaRoutes(app: FastifyInstance) {
       })
       .parse(req.query);
 
-    const items = await db.teacherAlert.findMany({
-      where: { classroomId, deletedAt: null, ...(q.status ? { status: q.status } : {}) },
-      orderBy: [{ severity: 'asc' }, { createdAt: 'desc' }],
-      take: 50,
-    });
+    const items = (
+      await db.teacherAlert.findMany({
+        where: { classroomId, deletedAt: null, ...(q.status ? { status: q.status } : {}) },
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+      })
+    ).sort(compararAlertas);
 
     return { items: items.map(serializeAlert), nextCursor: null };
   });

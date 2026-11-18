@@ -760,7 +760,7 @@ model TeacherAlert {
   studentProfileId String?
 
   /// "A-RIESGO"|"A-DELEG"|"A-EVASION"|"A-INACT"|"A-ATASCO"|"A-GRUPO"|
-  /// "A-CONSENT"|"A-DEGRAD"
+  /// "A-CONSENT"|"A-DEGRAD"|"A-AYUDA" (el estudiante tocó «Preguntar al profe»)
   code     String
   /// "critica" | "media" | "baja"
   severity String
@@ -858,7 +858,9 @@ model AuditLog {
   /// "ingreso_anomalo" | "cambio_modelo_llm" |
   /// Panel del equipo: "creacion_colegio" | "creacion_sede" | "creacion_curso" |
   /// "cambio_codigo_ingreso" | "creacion_cuenta" | "asignacion_curso" |
-  /// "activacion_cuenta" | "desactivacion_cuenta" | "restablecimiento_contrasena"
+  /// "activacion_cuenta" | "desactivacion_cuenta" | "restablecimiento_contrasena" |
+  /// Coordinación: "matricula_estudiantes" | "retiro_estudiante" | "restablecimiento_pin" |
+  /// "retiro_asignacion" | "consulta_alerta"
   action     String
   /// Tipo y id del objeto afectado.
   targetType String
