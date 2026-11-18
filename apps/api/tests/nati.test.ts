@@ -126,6 +126,27 @@ describe('Nati · pipeline', () => {
     expect(r.suggestAskTeacher).toBe(true);
   });
 
+  it('tras dos rechazos usa la pregunta frecuente si hay una para el mensaje', async () => {
+    natiDeps.ownModel = fakeModel(['No se guarda nada.', 'Nada se guarda nunca.']);
+    natiDeps.verifier = fakeVerifier(['rechazada', 'rechazada']);
+    const r = await handleNatiMessage({ message: '¿ustedes guardan lo que yo escribo aquí?', history: [] });
+    expect(r.rejected).toBe(2);
+    expect(r.source).toBe('faq');
+    expect(r.content).toMatch(/Qué sabe de mí/);
+    expect(r.suggestAskTeacher).toBe(false);
+  });
+
+  it('en el taller no cambia a pregunta frecuente tras dos rechazos', async () => {
+    natiDeps.ownModel = fakeModel(['mala', 'mala']);
+    natiDeps.verifier = fakeVerifier(['rechazada', 'rechazada']);
+    const r = await handleNatiMessage({
+      message: 'hazme un resumen de volcanes',
+      history: [],
+      task: 'Revisa la instrucción del niño.',
+    });
+    expect(r.source).toBe('unsure');
+  });
+
   it('acepta la segunda respuesta si la primera fue rechazada', async () => {
     natiDeps.ownModel = fakeModel(['mala', 'buena']);
     natiDeps.verifier = fakeVerifier(['rechazada', 'aprobada']);

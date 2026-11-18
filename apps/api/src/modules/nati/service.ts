@@ -82,11 +82,16 @@ export const natiDeps = {
 
 // ── Respuestas pregrabadas ───────────────────────────────────────────────────
 
-export function faqReply(message: string): string {
+/** La pregunta frecuente que corresponde al mensaje, si hay una. */
+export function matchFaq(message: string): string | null {
   for (const f of NATI_FAQ) {
     if (f.keys.test(message)) return f.answer;
   }
-  return NATI_FALLBACK_DEFAULT;
+  return null;
+}
+
+export function faqReply(message: string): string {
+  return matchFaq(message) ?? NATI_FALLBACK_DEFAULT;
 }
 
 // ── Verificador ──────────────────────────────────────────────────────────────
@@ -184,6 +189,11 @@ export async function handleNatiMessage(args: {
     rejected++;
   }
 
+  // Dos rechazos. Si hay una pregunta frecuente para esto, va esa: es
+  // pregrabada y revisada. Si no, el mensaje fijo. En el taller (task) no,
+  // porque ahí la respuesta tiene que hablar de la instrucción del niño.
+  const faq = args.task ? null : matchFaq(args.message);
+  if (faq) return done(faq, 'faq', rejected, false, started);
   return done(NATI_UNSURE_REPLY, 'unsure', rejected, true, started);
 }
 

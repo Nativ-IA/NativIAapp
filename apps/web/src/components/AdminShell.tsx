@@ -4,18 +4,111 @@ import { Mark } from './Logo';
 import { Icon, type IconName } from './Icon';
 import { setToken } from '../lib/api';
 
+export interface PanelTab {
+  to: string;
+  label: string;
+  active: boolean;
+}
+
 /**
- * Marco del panel de administración del equipo NativIA.
+ * Marco de los paneles de gestión: el del equipo NativIA y el de coordinación.
  *
  * Misma densidad que el módulo docente (principio 7 del design system): es
  * una herramienta de trabajo, no una pantalla para niños. La nota del pie
- * recuerda la regla del panel: aquí no hay datos de los estudiantes.
+ * recuerda la regla de privacidad de cada panel.
  */
-export function AdminShell({ children }: { children: ReactNode }) {
+export function PanelShell({
+  area,
+  sessionKey,
+  loginPath,
+  tabs = [],
+  footer,
+  children,
+}: {
+  /** Qué panel es: «Plataforma», o el nombre del colegio en coordinación. */
+  area: string;
+  /** Dónde guardó el ingreso los datos de la persona (nombre). */
+  sessionKey: string;
+  loginPath: string;
+  tabs?: PanelTab[];
+  footer: ReactNode;
+  children: ReactNode;
+}) {
   const nav = useNavigate();
+  let user: { firstName: string; lastName: string } | null = null;
+  try {
+    const raw = localStorage.getItem(sessionKey);
+    user = raw ? JSON.parse(raw) : null;
+  } catch {
+    user = null;
+  }
+
+  return (
+    <div className="flex screen pb-safe flex-col bg-surf print:bg-white">
+      <header className="border-b border-line bg-white print:hidden">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-2 gap-y-1 px-4 py-1.5 sm:gap-x-3 sm:px-6 sm:py-3">
+          <Mark className="h-7 w-7 shrink-0 text-brand" />
+          <p className="text-body font-bold">
+            Nativ<span className="text-brand">IA</span>
+          </p>
+          <span aria-hidden className="text-line">
+            |
+          </span>
+          <p className="min-w-0 truncate text-body font-semibold text-ink-2">{area}</p>
+
+          <div className="flex-1" />
+
+          {user && (
+            <p className="hidden text-micro text-ink-3 sm:block">
+              {user.firstName} {user.lastName}
+            </p>
+          )}
+          <button
+            onClick={() => {
+              setToken(null);
+              localStorage.removeItem(sessionKey);
+              nav(loginPath);
+            }}
+            className="flex min-h-touch min-w-touch shrink-0 items-center justify-center gap-2 rounded-sm px-3 text-small font-semibold text-ink-2 hover:bg-surf"
+          >
+            <Icon name="log-out" size={18} />
+            <span className="max-[359px]:sr-only">Salir</span>
+          </button>
+        </div>
+
+        {tabs.length > 0 && (
+          <nav className="mx-auto flex max-w-6xl gap-1 overflow-x-auto px-2 sm:px-6">
+            {tabs.map((t) => (
+              <NavLink
+                key={t.to}
+                to={t.to}
+                aria-current={t.active ? 'page' : undefined}
+                className={`-mb-px flex min-h-touch shrink-0 items-center border-b-2 px-3 text-small font-semibold transition-colors sm:px-4 ${
+                  t.active ? 'border-brand text-brand' : 'border-transparent text-ink-2 hover:text-ink'
+                }`}
+              >
+                {t.label}
+              </NavLink>
+            ))}
+          </nav>
+        )}
+      </header>
+
+      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-5 sm:px-6 sm:py-6 print:max-w-none print:p-0">
+        {children}
+      </main>
+
+      <footer className="mx-auto flex w-full max-w-6xl items-start gap-2 px-4 pb-6 text-micro text-ink-3 sm:items-center sm:px-6 print:hidden">
+        <Icon name="shield" size={16} className="mt-0.5 shrink-0 sm:mt-0" />
+        <span>{footer}</span>
+      </footer>
+    </div>
+  );
+}
+
+/** Panel del equipo NativIA. */
+export function AdminShell({ children }: { children: ReactNode }) {
   const { pathname } = useLocation();
-  const raw = localStorage.getItem('nativia.admin');
-  const admin = raw ? (JSON.parse(raw) as { firstName: string; lastName: string }) : null;
 
   // «Colegios» sigue marcada dentro del detalle de un colegio.
   const tabs = [
@@ -25,62 +118,15 @@ export function AdminShell({ children }: { children: ReactNode }) {
   ];
 
   return (
-    <div className="flex screen pb-safe flex-col bg-surf">
-      <header className="border-b border-line bg-white">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-2 gap-y-1 px-4 py-1.5 sm:gap-x-3 sm:px-6 sm:py-3">
-          <Mark className="h-7 w-7 shrink-0 text-brand" />
-          <p className="text-body font-bold">
-            Nativ<span className="text-brand">IA</span>
-          </p>
-          <span aria-hidden className="text-line">
-            |
-          </span>
-          <p className="min-w-0 truncate text-body font-semibold text-ink-2">Plataforma</p>
-
-          <div className="flex-1" />
-
-          {admin && (
-            <p className="hidden text-micro text-ink-3 sm:block">
-              {admin.firstName} {admin.lastName}
-            </p>
-          )}
-          <button
-            onClick={() => {
-              setToken(null);
-              localStorage.removeItem('nativia.admin');
-              nav('/admin/entrar');
-            }}
-            className="flex min-h-touch min-w-touch shrink-0 items-center justify-center gap-2 rounded-sm px-3 text-small font-semibold text-ink-2 hover:bg-surf"
-          >
-            <Icon name="log-out" size={18} />
-            <span className="max-[359px]:sr-only">Salir</span>
-          </button>
-        </div>
-
-        <nav className="mx-auto flex max-w-6xl gap-1 overflow-x-auto px-2 sm:px-6">
-          {tabs.map((t) => (
-            <NavLink
-              key={t.to}
-              to={t.to}
-              aria-current={t.active ? 'page' : undefined}
-              className={`-mb-px flex min-h-touch shrink-0 items-center border-b-2 px-3 text-small font-semibold transition-colors sm:px-4 ${
-                t.active ? 'border-brand text-brand' : 'border-transparent text-ink-2 hover:text-ink'
-              }`}
-            >
-              {t.label}
-            </NavLink>
-          ))}
-        </nav>
-      </header>
-
-      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-5 sm:px-6 sm:py-6">{children}</main>
-
-      <footer className="mx-auto flex w-full max-w-6xl items-start gap-2 px-4 pb-6 text-micro text-ink-3 sm:items-center sm:px-6">
-        <Icon name="shield" size={16} className="mt-0.5 shrink-0 sm:mt-0" />
-        Este panel no muestra nombres ni trabajo de los estudiantes, solo cifras. Cada cambio queda
-        en la auditoría.
-      </footer>
-    </div>
+    <PanelShell
+      area="Plataforma"
+      sessionKey="nativia.admin"
+      loginPath="/admin/entrar"
+      tabs={tabs}
+      footer="Este panel no muestra nombres ni trabajo de los estudiantes, solo cifras. Cada cambio queda en la auditoría."
+    >
+      {children}
+    </PanelShell>
   );
 }
 

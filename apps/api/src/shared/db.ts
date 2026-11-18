@@ -102,13 +102,8 @@ export const db = prisma.$extends({
 export const dbGlobal = prisma;
 
 /** Colegio activo de la petición, para poner en `data` al crear registros.
- *  `db` lo pondría igual; escribirlo deja explícito de quién es el dato y
- *  satisface los tipos de Prisma. */
-export function activeInstitutionId(): string {
-  const institutionId = getActiveInstitution();
-  if (!institutionId) throw new Error('No hay colegio activo en esta petición');
-  return institutionId;
-}
+ *  Vive en tenant.ts; se reexporta aquí porque casi siempre se usa junto a `db`. */
+export { activeInstitutionId } from './tenant.js';
 
 /** ¿El error es de un valor que ya existe (índice único)? Código P2002 de Prisma. */
 export function isUniqueViolation(error: unknown): boolean {

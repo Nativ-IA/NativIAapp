@@ -81,7 +81,9 @@ export async function tutorRoutes(app: FastifyInstance) {
         institutionId: activeInstitutionId(),
         classroomId: attempt.studentProfile.classroomId,
         studentProfileId: attempt.studentProfileId,
-        code: 'A-EVASION',
+        // Pedir ayuda no es evasión (A-EVASION es insistir en la respuesta):
+        // tiene su propio código para no etiquetar mal al niño que la pide.
+        code: 'A-AYUDA',
         severity: 'baja',
         message: `Un estudiante pidió ayuda en «${attempt.activity.title}».`,
         suggestedAction: JSON.stringify({

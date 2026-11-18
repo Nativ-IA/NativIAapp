@@ -124,6 +124,11 @@ export const ACTION_LABEL: Record<string, string> = {
   cambio_rol: 'Cambió un rol',
   ingreso_anomalo: 'Ingreso inusual',
   cambio_modelo_llm: 'Cambió el modelo del tutor',
+  matricula_estudiantes: 'Agregó estudiantes',
+  retiro_estudiante: 'Retiró a un estudiante',
+  restablecimiento_pin: 'Dio un PIN nuevo',
+  retiro_asignacion: 'Quitó a alguien de un curso',
+  consulta_alerta: 'Abrió una alerta',
 };
 
 const numero = new Intl.NumberFormat('es-CO');
@@ -139,8 +144,9 @@ export const fmtDate = (iso: string | null) =>
     ? new Date(iso).toLocaleString('es-CO', { dateStyle: 'medium', timeStyle: 'short' })
     : 'Nunca';
 
-/** Lee un recurso del panel. Sin sesión de plataforma, vuelve al ingreso. */
-export function useAdminQuery<T>(path: string) {
+/** Lee un recurso de un panel. Sin sesión válida para ese panel, vuelve a su
+ *  pantalla de ingreso. */
+export function usePanelQuery<T>(path: string, loginPath: string) {
   const nav = useNavigate();
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -154,7 +160,7 @@ export function useAdminQuery<T>(path: string) {
       .then((d) => alive && setData(d))
       .catch((e) => {
         if (e instanceof ApiError && (e.status === 401 || e.status === 403)) {
-          nav('/admin/entrar');
+          nav(loginPath);
           return;
         }
         if (alive) setError(e instanceof ApiError ? e.detail : 'Algo falló.');
@@ -162,10 +168,15 @@ export function useAdminQuery<T>(path: string) {
     return () => {
       alive = false;
     };
-  }, [path, version, nav]);
+  }, [path, version, nav, loginPath]);
 
   const reload = useCallback(() => setVersion((v) => v + 1), []);
-  return { data, error, reload };
+  return { data, error, reload, setData };
+}
+
+/** Lee un recurso del panel de plataforma. */
+export function useAdminQuery<T>(path: string) {
+  return usePanelQuery<T>(path, '/admin/entrar');
 }
 
 /** Mensaje de un error de la API para mostrar junto a un formulario. */

@@ -1,8 +1,10 @@
 // =============================================================================
-// Operaciones del panel de administración sobre la organización escolar.
+// Gestión de la organización escolar: colegios, sedes, cursos y asignaciones.
 //
-// Cruzan colegios, así que usan dbGlobal con el colegio explícito. Solo las
-// llama el módulo plataforma, detrás de requireAdmin.
+// Las usan el panel del equipo de plataforma (que cruza colegios) y el de
+// coordinación (que pasa el colegio activo de la petición). Por eso usan
+// dbGlobal, pero SIEMPRE con el colegio explícito en el `where`: quien las
+// llama decide de qué colegio son los datos, y lo hace a la vista.
 // =============================================================================
 
 import { randomInt } from 'node:crypto';
@@ -146,7 +148,9 @@ export async function regenerarCodigo(classroomId: string) {
   });
 }
 
-/** Asigna un adulto a un curso del mismo colegio. */
+/** Asigna un adulto a un curso del mismo colegio. Si la asignación existía y
+ *  se había quitado, la recupera; si ya está vigente, no cambia nada. Que el
+ *  adulto sea de ese colegio lo verifica quien llama (la cuenta es de identidad). */
 export async function asignarCurso(args: {
   institutionId: string;
   userId: string;
@@ -157,15 +161,63 @@ export async function asignarCurso(args: {
     where: { id: args.classroomId, institutionId: args.institutionId, deletedAt: null },
   });
   if (!curso) return null;
-  return dbGlobal.classroomAssignment.create({
-    data: {
+
+  // Matriz de docs/09 §7.2: el titular ve transcripciones y resuelve alertas.
+  const permisos = {
+    canViewTranscripts: args.role === 'titular',
+    canResolveRiskAlerts: args.role === 'titular',
+  };
+  return dbGlobal.classroomAssignment.upsert({
+    where: {
+      userId_classroomId_role: {
+        userId: args.userId,
+        classroomId: args.classroomId,
+        role: args.role,
+      },
+    },
+    update: { ...permisos, deletedAt: null, endsAt: null },
+    create: {
       institutionId: args.institutionId,
       userId: args.userId,
       classroomId: args.classroomId,
       role: args.role,
-      // Matriz de docs/09 §7.2: el titular ve transcripciones y resuelve alertas.
-      canViewTranscripts: args.role === 'titular',
-      canResolveRiskAlerts: args.role === 'titular',
+      ...permisos,
+    },
+  });
+}
+
+/** Quita a un adulto de un curso (todas sus funciones en él). Queda el registro,
+ *  con fecha de fin: la auditoría tiene que poder decir quién tenía el curso. */
+export async function quitarAsignacion(args: {
+  institutionId: string;
+  userId: string;
+  classroomId: string;
+}) {
+  const r = await dbGlobal.classroomAssignment.updateMany({
+    where: { ...args, deletedAt: null },
+    data: { deletedAt: new Date(), endsAt: new Date() },
+  });
+  return r.count;
+}
+
+/** Un curso del colegio, con su sede y sus adultos. */
+export async function obtenerCurso(institutionId: string, classroomId: string) {
+  return dbGlobal.classroom.findFirst({
+    where: { id: classroomId, institutionId, deletedAt: null },
+    select: {
+      id: true,
+      grade: true,
+      section: true,
+      shift: true,
+      year: true,
+      joinCode: true,
+      joinCodeExpires: true,
+      campus: { select: { id: true, name: true } },
+      assignments: {
+        where: { deletedAt: null },
+        orderBy: { createdAt: 'asc' },
+        select: { userId: true, role: true },
+      },
     },
   });
 }

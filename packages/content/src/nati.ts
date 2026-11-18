@@ -71,6 +71,13 @@ export const NATI_FAQ: Array<{ keys: RegExp; answer: string }> = [
       'Y después revisa lo que te dio.',
   },
   {
+    // Misma información que la pantalla «¿Qué sabe de mí?».
+    keys: /guard(a|an|as|o)\b|se queda|qui[eé]n (lo )?(ve|lee)|qu[eé] sabe(s|n)? de m[ií]/i,
+    answer:
+      'NativIA guarda tu nombre, tu animal y lo que haces en las actividades, y tu profe puede verlo para ayudarte. ' +
+      'Nunca guarda tu foto, tu dirección ni tu teléfono. Todo eso lo puedes ver en «¿Qué sabe de mí?».',
+  },
+  {
     keys: /datos|contrase|clave|tel[eé]fono|direcci|privad|secreto/i,
     answer:
       'Nunca le des tu nombre completo, tu dirección, tu colegio, tu teléfono, tus contraseñas ni fotos tuyas. ' +

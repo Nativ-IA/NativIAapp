@@ -17,6 +17,8 @@ import { AdminSchoolsPage } from './pages/admin/AdminSchoolsPage';
 import { AdminSchoolPage } from './pages/admin/AdminSchoolPage';
 import { AdminUsagePage } from './pages/admin/AdminUsagePage';
 import { AdminAuditPage } from './pages/admin/AdminAuditPage';
+import { CoordinatorHomePage } from './pages/coordinacion/CoordinatorHomePage';
+import { CoordinatorClassroomPage } from './pages/coordinacion/CoordinatorClassroomPage';
 import { StudentShell } from './components/AppShell';
 import { EmptyState } from './components/ui';
 
@@ -56,6 +58,10 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         <Route path="/profe/panel" element={<TeacherDashboardPage />} />
         <Route path="/profe/grupo" element={<TeacherGroupPage />} />
         <Route path="/profe/estudiante/:studentProfileId" element={<StudentDetailPage />} />
+
+        {/* Coordinación de un colegio (entra por /profe) */}
+        <Route path="/coordinacion" element={<CoordinatorHomePage />} />
+        <Route path="/coordinacion/cursos/:classroomId" element={<CoordinatorClassroomPage />} />
 
         {/* Equipo de plataforma */}
         <Route path="/admin/entrar" element={<AdminLoginPage />} />

@@ -103,14 +103,20 @@ al repo junto con el cambio.
 
 | Rol | Acceso |
 |---|---|
-| Estudiante | Código de curso **`4B7K`** → elige tu avatar → PIN gráfico 🐦 🫓 ⛰️ |
-| Docente | `docente@demo.local` / `demo1234` |
+| Estudiante | Código de curso **`4B7K`** (4.º B) o **`9QPT`** (3.º A) → elige tu avatar → PIN gráfico brote, arepa, montaña |
+| Docente | `docente@demo.local` / `demo1234` (titular de 4.º B) |
+| Docente sin curso | `docente3@demo.local` / `demo1234` (coordinación lo asigna en la demo) |
+| Coordinación | `/profe` con `coordinacion@demo.local` / `demo1234` → panel `/coordinacion` |
 | Estudiante, otro colegio | Código **`7HWM`**, mismo PIN |
 | Docente, otro colegio | `docente2@demo.local` / `demo1234` |
 | Equipo de plataforma | `/admin` con `admin@nativia.local` / `demo1234` |
 
-Hay dos colegios de demostración para mostrar el multi-colegio: cada docente ve solo su curso y cada
-código lleva solo a los estudiantes de su colegio.
+Hay dos colegios de demostración para mostrar el multi-colegio: cada docente ve solo su curso, la
+coordinación ve solo su colegio y cada código lleva solo a los estudiantes de su colegio.
+
+La IED de Demostración tiene un segundo curso, **3.º A**, preparado para mostrar el panel de
+coordinación: no tiene docente titular y dos estudiantes (Antonia P. y Emilio D.) esperan la
+autorización de su acudiente.
 
 Dos estudiantes están configurados a propósito para demostrar reglas del sistema:
 **Elena M.** no puede entrar (sin autorización del acudiente) y **Mateo R.** tiene el presupuesto de
