@@ -2,3 +2,12 @@
 // estudiante, transcripciones auditadas y alertas.
 // Dueño de: teacher_alerts, classroom_summaries.
 export { analiticaRoutes } from './routes.js';
+
+// Alertas del colegio, sin contenido (panel de coordinación, colegio activo).
+export {
+  type Severidad,
+  compararAlertas,
+  alertasAbiertasPorCurso,
+  alertasDeCurso,
+  detalleAlerta,
+} from './alertas-colegio.js';

@@ -4,7 +4,8 @@
 // Expone: los permisos de un adulto sobre un curso.
 export { canAccessClassroom } from './service.js';
 
-// Panel de administración (cruzan colegios; solo para el módulo plataforma).
+// Gestión de la organización (paneles de plataforma y de coordinación). Toda
+// función recibe el colegio explícito.
 export {
   listarColegios,
   crearColegio,
@@ -13,6 +14,8 @@ export {
   crearCurso,
   regenerarCodigo,
   asignarCurso,
+  quitarAsignacion,
+  obtenerCurso,
   nombresDeColegios,
   contarCursos,
 } from './admin.js';

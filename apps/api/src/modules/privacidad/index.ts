@@ -7,3 +7,12 @@ export { privacidadRoutes } from './routes.js';
 
 // Panel de administración: auditoría de las acciones del equipo.
 export { auditarPlataforma, auditoriaReciente } from './admin.js';
+
+// Autorizaciones de los acudientes (panel de coordinación, colegio activo).
+export {
+  POLITICA_VIGENTE,
+  CANALES_AUTORIZACION,
+  type EstadoAutorizacion,
+  estadoAutorizaciones,
+  registrarAutorizacion,
+} from './autorizaciones.js';

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { db } from '../../shared/db.js';
 import { canAccessClassroom } from '../instituciones/index.js';
 import { forbidden } from '../../shared/http.js';
+import { POLITICA_VIGENTE } from './autorizaciones.js';
 
 export async function privacidadRoutes(app: FastifyInstance) {
   app.addHook('onRequest', app.requireStaff);
@@ -32,7 +33,7 @@ export async function privacidadRoutes(app: FastifyInstance) {
       granted: items.filter((i) => i.status === 'otorgado').length,
       pending: items.filter((i) => i.status === 'pendiente').length,
       revoked: items.filter((i) => i.status === 'revocado').length,
-      policyVersion: 'v0.1-prototipo',
+      policyVersion: POLITICA_VIGENTE,
       items,
     };
   });

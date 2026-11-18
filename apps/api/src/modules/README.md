@@ -28,6 +28,7 @@ src/
 | `tutor` | Diálogo socrático con el LLM, moderación, fuga de respuesta, presupuesto | `llm_interactions`, `llm_turns`, `token_budgets` | Activo · primer candidato a servicio propio |
 | `analitica` | Panel docente: inicio, grupo, detalle, transcripciones, alertas | `teacher_alerts`, `classroom_summaries` | Activo |
 | `plataforma` | Panel de administración del equipo (`/v1/admin`): pide los datos a cada módulo por su `index.ts` | — (no es dueño de tablas) | Activo |
+| `coordinacion` | Panel del coordinador de un colegio (`/v1/school`): cursos, docentes, estudiantes con su autorización, alertas sin contenido | — (no es dueño de tablas) | Activo (`coordinacion/README.md`) |
 | `nati` | Asistente que acompaña al estudiante en todas las pantallas | — | Reservado (`nati/README.md`) |
 
 ## Reglas

@@ -4,7 +4,10 @@
 // adultos por correo y contraseña).
 export { identidadRoutes } from './routes.js';
 
-// Panel de administración (cruzan colegios; solo para el módulo plataforma).
+// Cuentas de estudiante (panel de coordinación, colegio activo).
+export { crearCuentaEstudiante, nombresDeUsuarios } from './estudiantes.js';
+
+// Cuentas de adultos (paneles de plataforma y de coordinación, colegio explícito).
 export {
   ROLES_ADULTOS,
   type RolAdulto,

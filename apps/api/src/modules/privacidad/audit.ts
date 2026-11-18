@@ -30,7 +30,13 @@ export type AuditAction =
   | 'asignacion_curso'
   | 'activacion_cuenta'
   | 'desactivacion_cuenta'
-  | 'restablecimiento_contrasena';
+  | 'restablecimiento_contrasena'
+  // Panel de coordinación del colegio
+  | 'matricula_estudiantes'
+  | 'retiro_estudiante'
+  | 'restablecimiento_pin'
+  | 'retiro_asignacion'
+  | 'consulta_alerta';
 
 export async function audit(args: {
   actorId: string | null;
